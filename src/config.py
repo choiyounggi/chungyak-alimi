@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     web_password: str = ""
     # 세션 쿠키 서명 키(고정해야 재시작 후에도 로그인 유지)
     session_secret: str = "chungyak-alimi-dev-secret-change-me"
+    # 세션 쿠키 Secure 속성(HTTPS 전용). 프로덕션 기본 True, 로컬(http)은 .env에서 false.
+    session_https_only: bool = True
 
     # 카카오맵 JavaScript 앱키(상세페이지 지도). 도메인 제한으로 보호됨.
     kakao_js_key: str = ""

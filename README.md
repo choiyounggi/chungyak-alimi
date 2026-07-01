@@ -35,7 +35,7 @@
 
 - **수집·정제**: 관심 조건(`config/filters.yaml`) 매칭. 접수마감 지난 공고 제외.
 - **알림**: 신규 매칭 공고를 텔레그램으로. 한 공고는 한 번만(dedup).
-- **대시보드**: 마감임박순 목록 + D-day. 제목 클릭 → **상세페이지**(주택형별 모집·특공별 세대·일정·규제·상세주소).
+- **대시보드**(당근 스타일, 세션 로그인): 마감임박순 목록 + D-day. 제목 클릭 → **상세페이지**(주택형별 모집·특공별 세대·일정·규제·상세주소 + **카카오 지도·V-World 필지 폴리곤**).
 - **자동 운영**: 하루 2회 배치 + DuckDNS IP 자동갱신(30분).
 
 ## 개발 환경
@@ -54,7 +54,10 @@ python3.13 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 ## 시크릿 관리
 
 - 로컬: 모든 시크릿은 `.env`(`.gitignore`로 차단). `.env.example`엔 placeholder만.
-- CI/CD: **GitHub Actions Secrets** — `ODCLOUD_API_KEY`, `TG_*`, `POSTGRES_PASSWORD`, 배포용 `PI_HOST/USER/PORT/SSH_KEY`.
+  - `ODCLOUD_API_KEY`, `TG_BOT_TOKEN`/`TG_CHAT_ID`, `POSTGRES_PASSWORD`
+  - 웹: `WEB_USER`/`WEB_PASSWORD`(로그인), `SESSION_SECRET`(세션 서명), `SESSION_HTTPS_ONLY`(프로덕션 true)
+  - 지도: `KAKAO_JS_KEY`(도메인 제한), `VWORLD_KEY`(필지 폴리곤)
+- CI/CD: **GitHub Actions Secrets** — 위 값 + 배포용 `PI_HOST`/`PI_USER`/`PI_PORT`/`PI_SSH_KEY`.
 
 ## 배포 / CICD
 

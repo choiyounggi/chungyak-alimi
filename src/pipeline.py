@@ -53,16 +53,19 @@ def enrich_lh_supply() -> int:
             if already:
                 continue
             r = n.raw or {}
-            supplies = fetch_lh_supply(
-                pan_id=n.pblanc_no,
-                ccr=r.get("CCR_CNNT_SYS_DS_CD"),
-                spl=r.get("SPL_INF_TP_CD"),
-                upp=r.get("UPP_AIS_TP_CD"),
-                ais=r.get("AIS_TP_CD"),
-            )
-            if supplies:
-                upsert_house_types(supplies, session=session)
-                added += len(supplies)
+            try:
+                supplies = fetch_lh_supply(
+                    pan_id=n.pblanc_no,
+                    ccr=r.get("CCR_CNNT_SYS_DS_CD"),
+                    spl=r.get("SPL_INF_TP_CD"),
+                    upp=r.get("UPP_AIS_TP_CD"),
+                    ais=r.get("AIS_TP_CD"),
+                )
+                if supplies:
+                    upsert_house_types(supplies, session=session)
+                    added += len(supplies)
+            except Exception:
+                logger.exception("LH 공급정보 보강 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
     return added
 
 
@@ -84,14 +87,17 @@ def enrich_polygons() -> int:
             addr = raw.get("HSSPLY_ADRES") or n.hsslpy_adres
             if not addr:
                 continue
-            poly = fetch_parcel_polygon(addr)
-            session.execute(
-                update(Notice)
-                .where(Notice.pblanc_no == n.pblanc_no)
-                .values(raw={**raw, "_polygon": poly or []})
-            )
-            if poly:
-                added += 1
+            try:
+                poly = fetch_parcel_polygon(addr)
+                session.execute(
+                    update(Notice)
+                    .where(Notice.pblanc_no == n.pblanc_no)
+                    .values(raw={**raw, "_polygon": poly or []})
+                )
+                if poly:
+                    added += 1
+            except Exception:
+                logger.exception("폴리곤 보강 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
         session.commit()
     return added
 
@@ -109,20 +115,23 @@ def enrich_lh_detail() -> int:
             r = n.raw or {}
             if r.get("_lh_detail"):  # 이미 보강됨
                 continue
-            d = fetch_lh_detail(
-                pan_id=n.pblanc_no,
-                ccr=r.get("CCR_CNNT_SYS_DS_CD"),
-                spl=r.get("SPL_INF_TP_CD"),
-                upp=r.get("UPP_AIS_TP_CD"),
-                ais=r.get("AIS_TP_CD"),
-            )
-            if d:
-                session.execute(
-                    update(Notice)
-                    .where(Notice.pblanc_no == n.pblanc_no)
-                    .values(raw={**r, "_lh_detail": d}, hsslpy_adres=d.get("adres") or n.hsslpy_adres)
+            try:
+                d = fetch_lh_detail(
+                    pan_id=n.pblanc_no,
+                    ccr=r.get("CCR_CNNT_SYS_DS_CD"),
+                    spl=r.get("SPL_INF_TP_CD"),
+                    upp=r.get("UPP_AIS_TP_CD"),
+                    ais=r.get("AIS_TP_CD"),
                 )
-                added += 1
+                if d:
+                    session.execute(
+                        update(Notice)
+                        .where(Notice.pblanc_no == n.pblanc_no)
+                        .values(raw={**r, "_lh_detail": d}, hsslpy_adres=d.get("adres") or n.hsslpy_adres)
+                    )
+                    added += 1
+            except Exception:
+                logger.exception("LH 상세 보강 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
         session.commit()
     return added
 
@@ -137,9 +146,10 @@ def run_batch(*, notify: bool = True) -> dict:
     upsert_house_types(house_types)
     upsert_notices(lh_notices, source="lh")
     total, matched = evaluate_all(load_filter_config())
-    lh_enriched = enrich_lh_supply()  # 매칭된 LH의 면적·세대수 보강
-    lh_detailed = enrich_lh_detail()  # 매칭된 LH의 주소·일정·공고전문 보강
-    polygons = enrich_polygons()      # 매칭 공고의 필지 폴리곤(V-World)
+    # 보강 단계도 소스별 격리 — 외부 API 이상이 배치 전체를 중단하지 않게
+    lh_enriched = _safe(enrich_lh_supply, "LH 공급정보 보강", 0)
+    lh_detailed = _safe(enrich_lh_detail, "LH 상세 보강", 0)
+    polygons = _safe(enrich_polygons, "필지 폴리곤 보강", 0)
     sent = notify_new_matches() if notify else 0
     return {
         "collected": len(notices),

@@ -29,7 +29,10 @@ def _geocode(addr: str, client: httpx.Client) -> tuple[float, float] | None:
     body = resp.json().get("response", {})
     if body.get("status") != "OK":
         return None
-    p = body["result"]["point"]
+    # status=OK 여도 result/point 가 빠진 부분 응답이 올 수 있어 방어적으로 접근
+    p = (body.get("result") or {}).get("point") or {}
+    if "x" not in p or "y" not in p:
+        return None
     return float(p["x"]), float(p["y"])
 
 
@@ -54,15 +57,21 @@ def _parcel_outline(x: float, y: float, client: httpx.Client) -> list[list[float
     body = resp.json().get("response", {})
     if body.get("status") != "OK":
         return None
-    feats = body.get("result", {}).get("featureCollection", {}).get("features", [])
+    feats = (body.get("result") or {}).get("featureCollection", {}).get("features", [])
     if not feats:
         return None
-    geom = feats[0].get("geometry", {})
+    # geometry 가 null 로 올 수 있어(.get default는 값이 null이면 무시됨) or {} 로 보정
+    geom = feats[0].get("geometry") or {}
     coords = geom.get("coordinates")
     if not coords:
         return None
     # Polygon: [ring, ...] / MultiPolygon: [[ring, ...], ...] → 첫 외곽 링
-    ring = coords[0][0] if geom.get("type") == "MultiPolygon" else coords[0]
+    try:
+        ring = coords[0][0] if geom.get("type") == "MultiPolygon" else coords[0]
+    except (IndexError, TypeError):
+        return None
+    if not ring or not isinstance(ring, list):
+        return None
     return [[float(pt[0]), float(pt[1])] for pt in ring]
 
 
@@ -82,7 +91,7 @@ def fetch_parcel_polygon(addr: str, *, client: httpx.Client | None = None) -> li
                 if outline:
                     return outline
         return None
-    except httpx.HTTPError as e:
+    except Exception as e:  # 외부 API 응답 이상(KeyError/구조변형 등)이 배치를 죽이지 않게
         logger.warning("V-World 폴리곤 조회 실패(%s): %s", addr, e)
         return None
     finally:
