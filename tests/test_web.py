@@ -93,15 +93,29 @@ def test_healthz():
     assert r.json() == {"ok": True}
 
 
-# ── 인증: 자격증명 설정 시 미인증 401 ──
-def test_auth_required_when_configured(seeded, monkeypatch):
+# ── 인증: 세션 로그인 플로우(미인증→로그인, 로그인→대시보드) ──
+def test_login_flow(seeded, monkeypatch):
     from src.web import app as webapp
 
     monkeypatch.setattr(webapp.settings, "web_user", "me")
     monkeypatch.setattr(webapp.settings, "web_password", "pw")
     client = TestClient(app)
-    assert client.get("/").status_code == 401  # 미인증
-    ok = client.get("/", auth=("me", "pw"))
-    assert ok.status_code == 200  # 올바른 자격증명
-    bad = client.get("/", auth=("me", "wrong"))
-    assert bad.status_code == 401  # 틀린 비번
+
+    # 미인증 접근 → 로그인 페이지로 리다이렉트
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "로그인" in r.text and "비밀번호" in r.text
+
+    # 틀린 비번 → 401 + 에러 메시지
+    bad = client.post("/login", data={"username": "me", "password": "wrong"})
+    assert bad.status_code == 401
+    assert "올바르지 않" in bad.text
+
+    # 올바른 로그인 → 세션 → 대시보드 접근
+    ok = client.post("/login", data={"username": "me", "password": "pw"})
+    assert ok.status_code == 200
+    assert "내 관심 청약" in ok.text
+
+    # 로그아웃 → 다시 로그인 페이지
+    out = client.get("/logout")
+    assert "로그인" in out.text
