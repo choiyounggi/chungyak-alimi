@@ -129,3 +129,22 @@ def test_login_flow(seeded, monkeypatch):
     # 로그아웃 → 다시 로그인 페이지
     out = client.get("/logout")
     assert "로그인" in out.text
+
+
+# ── 상세: 카카오 지도(키 설정 시 렌더, 없으면 미렌더) ──
+def test_detail_map(seeded, monkeypatch):
+    from src.web import app as webapp
+
+    monkeypatch.setattr(webapp.settings, "kakao_js_key", "TESTKAKAOKEY")
+    r = TestClient(app).get("/notice/W1")
+    assert 'id="map"' in r.text
+    assert "dapi.kakao.com" in r.text
+    assert "TESTKAKAOKEY" in r.text
+
+
+def test_detail_no_map_without_key(seeded, monkeypatch):
+    from src.web import app as webapp
+
+    monkeypatch.setattr(webapp.settings, "kakao_js_key", "")
+    r = TestClient(app).get("/notice/W1")
+    assert 'id="map"' not in r.text

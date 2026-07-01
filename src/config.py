@@ -35,5 +35,8 @@ class Settings(BaseSettings):
     # 세션 쿠키 서명 키(고정해야 재시작 후에도 로그인 유지)
     session_secret: str = "chungyak-alimi-dev-secret-change-me"
 
+    # 카카오맵 JavaScript 앱키(상세페이지 지도). 도메인 제한으로 보호됨.
+    kakao_js_key: str = ""
+
 
 settings = Settings()
