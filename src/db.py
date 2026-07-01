@@ -3,13 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Integer, String, create_engine, func, select
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Integer,
+    Numeric,
+    String,
+    create_engine,
+    func,
+    select,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from .config import settings
-from .models import ApplyhomeNotice
+from .models import ApplyhomeHouseType, ApplyhomeNotice
 
 # ApplyhomeNotice → notice 테이블에 저장할 컬럼(공고 식별/일정/필터축)
 _COLS = (
@@ -68,6 +77,33 @@ class Notice(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class NoticeHouseType(Base):
+    __tablename__ = "notice_house_type"
+
+    pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
+    house_ty: Mapped[str] = mapped_column(String, primary_key=True)
+    house_manage_no: Mapped[str | None] = mapped_column(String)
+    model_no: Mapped[str | None] = mapped_column(String)
+    suply_ar: Mapped[float | None] = mapped_column(Numeric(10, 4))   # 공급면적(㎡)
+    lttot_top_amount: Mapped[int | None] = mapped_column(Integer)     # 분양최고가(만원)
+    suply_hshldco: Mapped[int | None] = mapped_column(Integer)
+    spsply_hshldco: Mapped[int | None] = mapped_column(Integer)
+    raw: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+_HT_COLS = (
+    "pblanc_no",
+    "house_ty",
+    "house_manage_no",
+    "model_no",
+    "suply_ar",
+    "lttot_top_amount",
+    "suply_hshldco",
+    "spsply_hshldco",
+)
+
+
 engine = create_engine(settings.database_url, future=True)
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
@@ -110,6 +146,10 @@ def upsert_notices(
     if not notices:
         return UpsertResult()
 
+    # 같은 배치 내 중복 공고번호 제거(마지막 유지) → ON CONFLICT 이중 반영 방지
+    deduped = {n.pblanc_no: n for n in notices}
+    notices = list(deduped.values())
+
     own = session is None
     session = session or SessionLocal()
     try:
@@ -133,6 +173,40 @@ def upsert_notices(
             new=[i for i in incoming if i not in existing],
             updated=[i for i in incoming if i in existing],
         )
+    finally:
+        if own:
+            session.close()
+
+
+def upsert_house_types(
+    house_types: list[ApplyhomeHouseType],
+    *,
+    session: Session | None = None,
+) -> int:
+    """주택형(면적·분양가)을 (pblanc_no, house_ty) 기준으로 upsert. 처리 건수를 반환."""
+    if not house_types:
+        return 0
+
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        # 같은 배치 내 (pblanc_no, house_ty) 중복 제거(마지막 유지)
+        deduped = {(ht.pblanc_no, ht.house_ty): ht for ht in house_types}
+        rows = []
+        for ht in deduped.values():
+            row = {c: getattr(ht, c) for c in _HT_COLS}
+            row["raw"] = ht.raw
+            rows.append(row)
+
+        stmt = pg_insert(NoticeHouseType).values(rows)
+        update_set = {c: stmt.excluded[c] for c in (*_HT_COLS, "raw") if c not in ("pblanc_no", "house_ty")}
+        update_set["updated_at"] = func.now()
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["pblanc_no", "house_ty"], set_=update_set
+        )
+        session.execute(stmt)
+        session.commit()
+        return len(rows)
     finally:
         if own:
             session.close()

@@ -58,3 +58,35 @@ class ApplyhomeNotice(BaseModel):
         if v in ("", None):
             return None
         return v
+
+
+class ApplyhomeHouseType(BaseModel):
+    """청약홈 APT 주택형별 상세 1건 (면적·분양가). getAPTLttotPblancMdl"""
+
+    # protected_namespaces=() : model_no 가 pydantic 보호 접두사(model_)와 겹치는 경고 방지
+    model_config = ConfigDict(populate_by_name=True, extra="allow", protected_namespaces=())
+
+    pblanc_no: str = Field(alias="PBLANC_NO")
+    house_manage_no: str | None = Field(default=None, alias="HOUSE_MANAGE_NO")
+    model_no: str | None = Field(default=None, alias="MODEL_NO")
+    house_ty: str = Field(alias="HOUSE_TY")
+    suply_ar: float | None = Field(default=None, alias="SUPLY_AR")  # 공급면적(㎡)
+    lttot_top_amount: int | None = Field(default=None, alias="LTTOT_TOP_AMOUNT")  # 분양최고가(만원)
+    suply_hshldco: int | None = Field(default=None, alias="SUPLY_HSHLDCO")  # 일반공급 세대
+    spsply_hshldco: int | None = Field(default=None, alias="SPSPLY_HSHLDCO")  # 특별공급 세대
+
+    raw: dict = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _stash_raw(cls, data):
+        if isinstance(data, dict) and "raw" not in data:
+            return {**data, "raw": dict(data)}
+        return data
+
+    @field_validator("suply_ar", "lttot_top_amount", "suply_hshldco", "spsply_hshldco", mode="before")
+    @classmethod
+    def _empty_num_to_none(cls, v):
+        if v in ("", None):
+            return None
+        return v
