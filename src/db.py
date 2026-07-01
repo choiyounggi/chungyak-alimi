@@ -256,7 +256,9 @@ def save_match_results(
             session.close()
 
 
-def evaluate_all(cfg: FilterConfig, *, session: Session | None = None) -> tuple[int, int]:
+def evaluate_all(
+    cfg: FilterConfig, *, today: date | None = None, session: Session | None = None
+) -> tuple[int, int]:
     """DB의 모든 공고를 필터로 평가해 match_result 에 저장. (평가건수, 매칭건수) 반환."""
     own = session is None
     session = session or SessionLocal()
@@ -267,7 +269,7 @@ def evaluate_all(cfg: FilterConfig, *, session: Session | None = None) -> tuple[
             hts = session.scalars(
                 select(NoticeHouseType).where(NoticeHouseType.pblanc_no == n.pblanc_no)
             ).all()
-            matched, fails = match_notice(n, hts, cfg)
+            matched, fails = match_notice(n, hts, cfg, today=today)
             results.append((n.pblanc_no, matched, fails))
         save_match_results(results, session=session)
         return (len(results), sum(1 for _, m, _ in results if m))

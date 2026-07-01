@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -23,6 +24,7 @@ class FilterConfig(BaseModel):
     min_households: int | None = None
     price_max_manwon: int | None = None
     exclude_keywords: list[str] = []
+    only_open: bool = True  # 접수마감이 지난 공고 제외(미래/진행 청약만)
 
 
 def load_filter_config(path: str = "config/filters.yaml") -> FilterConfig:
@@ -37,14 +39,24 @@ def _to_int(v) -> int:
         return 0
 
 
-def match_notice(notice, house_types, cfg: FilterConfig) -> tuple[bool, list[str]]:
+def match_notice(
+    notice, house_types, cfg: FilterConfig, today: date | None = None
+) -> tuple[bool, list[str]]:
     """공고(+주택형들)가 필터를 통과하는지 판정. (통과여부, 탈락사유목록) 반환.
 
     notice/house_types 는 pydantic 모델(수집 직후) 또는 ORM 행(DB) 모두 허용 —
     필요한 속성(area_nm, house_secd_nm, lttot_top_amount, raw ...)만 접근한다.
     빈 필터([]/None)는 '제한 없음'으로 통과시킨다.
     """
+    today = today or date.today()
     fails: list[str] = []
+
+    # 접수마감이 지난 공고 제외(미래/진행 청약만). 최종 마감 = max(일반, 특공).
+    if cfg.only_open:
+        deadlines = [d for d in (notice.rcept_endde, notice.spsply_rcept_endde) if d]
+        deadline = max(deadlines) if deadlines else None
+        if deadline is not None and deadline < today:
+            fails.append("접수마감")
 
     if cfg.regions and notice.area_nm not in cfg.regions:
         fails.append(f"지역:{notice.area_nm}")
