@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from src.collectors.lh import (
     LhNotice,
     LhSupply,
+    fetch_lh_detail,
     fetch_lh_notices,
     fetch_lh_supply,
     normalize_region,
@@ -140,3 +141,44 @@ def test_fetch_lh_supply():
     assert len(out) == 2
     assert all(s.pblanc_no == "P9" for s in out)
     assert out[0].suply_ar == 111.8836
+
+
+DTL_RESPONSE = [
+    {"dsSch": [{"PAN_ID": "x"}]},
+    {"dsSbd": [{
+        "LCT_ARA_ADR": "경기도 고양시 덕양구 도내동",
+        "LCT_ARA_DTL_ADR": "외 8개 동 일원",
+        "MVIN_XPC_YM": "2030년 03월", "SUM_TOT_HSH_CNT": "1024",
+    }]},
+    {"dsSplScdl": [{
+        "HS_SBSC_ACP_TRG_CD_NM": "사전청약당첨자",
+        "ACP_DTTM": "2026.07.20 10:00 ~ 2026.07.21 17:00",
+        "PZWR_ANC_DT": "20260819",
+        "PZWR_PPR_SBM_ST_DT": "20260826", "PZWR_PPR_SBM_ED_DT": "20260830",
+        "CTRT_ST_DT": "20261116", "CTRT_ED_DT": "20261119",
+    }]},
+    {"dsEtcInfo": [{"PAN_DTL_CTS": "■ 공급위치 : 경기도 고양시 ..."}]},
+    {"resHeader": [{"SS_CODE": "Y"}]},
+]
+
+
+# ── 상세정보 파싱: 주소 결합 · 서류제출 기간 · 공고전문 ──
+def test_fetch_lh_detail():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=DTL_RESPONSE)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        d = fetch_lh_detail(pan_id="P", ccr="02", spl="050", upp="05", ais="05", client=c)
+    assert d["adres"] == "경기도 고양시 덕양구 도내동 외 8개 동 일원"
+    assert d["schedule"][0]["anc"] == "2026-08-19"
+    assert d["schedule"][0]["sbm"] == "2026-08-26 ~ 2026-08-30"  # 서류제출 기간
+    assert "공급위치" in d["pan_dtl_cts"]
+
+
+# ── 상세정보: SS_CODE 오류면 None ──
+def test_fetch_lh_detail_ss_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[{"resHeader": [{"SS_CODE": "E"}]}])
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        assert fetch_lh_detail(pan_id="P", ccr="1", spl="1", upp="1", ais="1", client=c) is None

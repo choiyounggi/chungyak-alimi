@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 LH_BASE = "https://apis.data.go.kr/B552555"
 LIST_PATH = "/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1"
 SPL_PATH = "/lhLeaseNoticeSplInfo1/getLeaseNoticeSplInfo1"
+DTL_PATH = "/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1"
 
 # 상위매물유형: 05 분양주택, 06 임대주택, 39 신혼희망타운, 13 주거복지
 DEFAULT_TYPES = ("05", "06", "39", "13")
@@ -145,6 +146,75 @@ class LhSupply(BaseModel):
         except (TypeError, ValueError):
             return None  # "공고문 참조" 같은 텍스트 → None
         return v
+
+
+def _first_ds(body, key: str) -> dict:
+    rows = _extract_ds_list(body, key)
+    return rows[0] if rows else {}
+
+
+def _ymd(s) -> str | None:
+    s = str(s or "")
+    return f"{s[0:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else (s or None)
+
+
+def fetch_lh_detail(
+    *,
+    pan_id: str,
+    ccr: str | None,
+    spl: str | None,
+    upp: str | None,
+    ais: str | None,
+    client: httpx.Client | None = None,
+) -> dict | None:
+    """LH 공고 상세정보(주소·일정·서류제출·공고전문). 목록 API엔 없는 세부."""
+    own_client = client is None
+    client = client or httpx.Client(timeout=30.0)
+    try:
+        resp = client.get(
+            LH_BASE + DTL_PATH,
+            params={
+                "serviceKey": settings.odcloud_api_key,
+                "PAN_ID": pan_id,
+                "CCR_CNNT_SYS_DS_CD": ccr,
+                "SPL_INF_TP_CD": spl,
+                "UPP_AIS_TP_CD": upp,
+                "AIS_TP_CD": ais,
+            },
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        if not _ss_ok(body, where=f"상세(PAN_ID={pan_id})"):
+            return None
+        sbd = _first_ds(body, "dsSbd")
+        etc = _first_ds(body, "dsEtcInfo")
+        adres = " ".join(
+            x for x in (sbd.get("LCT_ARA_ADR"), sbd.get("LCT_ARA_DTL_ADR")) if x
+        ).strip()
+        schedule = []
+        for r in _extract_ds_list(body, "dsSplScdl"):
+            sbm_st, sbm_ed = r.get("PZWR_PPR_SBM_ST_DT"), r.get("PZWR_PPR_SBM_ED_DT")
+            ctrt_st, ctrt_ed = r.get("CTRT_ST_DT"), r.get("CTRT_ED_DT")
+            schedule.append(
+                {
+                    "gubun": r.get("HS_SBSC_ACP_TRG_CD_NM"),
+                    "acp": r.get("ACP_DTTM"),
+                    "anc": _ymd(r.get("PZWR_ANC_DT")),
+                    "sbm": f"{_ymd(sbm_st)} ~ {_ymd(sbm_ed)}" if sbm_st else None,
+                    "ctrt": f"{_ymd(ctrt_st)} ~ {_ymd(ctrt_ed)}" if ctrt_st else None,
+                }
+            )
+        return {
+            "adres": adres or None,
+            "mvin": sbd.get("MVIN_XPC_YM"),
+            "tot": sbd.get("SUM_TOT_HSH_CNT"),
+            "ddo_ar": sbd.get("MIN_MAX_RSDN_DDO_AR"),
+            "schedule": schedule,
+            "pan_dtl_cts": (etc.get("PAN_DTL_CTS") or "").strip()[:2000],
+        }
+    finally:
+        if own_client:
+            client.close()
 
 
 def fetch_lh_supply(

@@ -55,7 +55,7 @@
   {% set n = it.notice %}
   <div class="card">
     <div class="head-row">
-      <a class="title" href="{{ n.pblanc_url or '#' }}" target="_blank" rel="noopener">{{ n.house_nm }}</a>
+      <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
       {% if it.dday is not none %}
         {% if it.dday < 0 %}
           <span class="badge dday-pre">D+{{ -it.dday }} 접수예정</span>
@@ -72,6 +72,7 @@
       <span class="area-tag">{{ n.area_nm or '-' }}</span>
       <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
     </div>
+    {% if it.adres %}<div class="row"><span>📍 {{ it.adres }}</span></div>{% endif %}
     <div class="row">
       <span>🗓 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
       {% if n.spsply_rcept_bgnde %}<span>특공 {{ n.spsply_rcept_bgnde }}~{{ n.spsply_rcept_endde }}</span>{% endif %}

@@ -70,6 +70,22 @@ def test_index_renders(seeded):
     assert SAMPLE["HOUSE_NM"] in r.text
 
 
+# ── 상세 페이지: 렌더 + 주택형/특공 표시 ──
+def test_detail_renders(seeded):
+    client = TestClient(app)
+    r = client.get("/notice/W1")
+    assert r.status_code == 200
+    assert SAMPLE["HOUSE_NM"] in r.text
+    assert SAMPLE_HT["HOUSE_TY"] in r.text  # 주택형(055.9200A)
+    assert "주택형별 모집" in r.text
+    assert "자격요건" in r.text  # 공고문 안내 섹션
+
+
+# ── 상세: 없는 공고 404 ──
+def test_detail_not_found():
+    assert TestClient(app).get("/notice/NOPE").status_code == 404
+
+
 # ── healthz (인증 불필요) ──
 def test_healthz():
     r = TestClient(app).get("/healthz")

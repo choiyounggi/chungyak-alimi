@@ -4,10 +4,10 @@ import json
 import logging
 import sys
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, select, update
 
 from .collectors.applyhome import fetch_apt_house_types, fetch_apt_notices
-from .collectors.lh import fetch_lh_notices, fetch_lh_supply
+from .collectors.lh import fetch_lh_detail, fetch_lh_notices, fetch_lh_supply
 from .db import (
     MatchResult,
     Notice,
@@ -64,6 +64,37 @@ def enrich_lh_supply() -> int:
     return added
 
 
+def enrich_lh_detail() -> int:
+    """매칭된 LH 공고의 상세(주소·일정·서류제출·공고전문)를 raw에 병합. 처리 건수 반환."""
+    added = 0
+    with SessionLocal() as session:
+        q = (
+            select(Notice)
+            .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
+            .where(MatchResult.matched.is_(True), Notice.source == "lh")
+        )
+        for n in session.scalars(q).all():
+            r = n.raw or {}
+            if r.get("_lh_detail"):  # 이미 보강됨
+                continue
+            d = fetch_lh_detail(
+                pan_id=n.pblanc_no,
+                ccr=r.get("CCR_CNNT_SYS_DS_CD"),
+                spl=r.get("SPL_INF_TP_CD"),
+                upp=r.get("UPP_AIS_TP_CD"),
+                ais=r.get("AIS_TP_CD"),
+            )
+            if d:
+                session.execute(
+                    update(Notice)
+                    .where(Notice.pblanc_no == n.pblanc_no)
+                    .values(raw={**r, "_lh_detail": d}, hsslpy_adres=d.get("adres") or n.hsslpy_adres)
+                )
+                added += 1
+        session.commit()
+    return added
+
+
 def run_batch(*, notify: bool = True) -> dict:
     """수집 → 저장 → 평가 → (알림). 배치 1회."""
     init_db()
@@ -75,12 +106,14 @@ def run_batch(*, notify: bool = True) -> dict:
     upsert_notices(lh_notices, source="lh")
     total, matched = evaluate_all(load_filter_config())
     lh_enriched = enrich_lh_supply()  # 매칭된 LH의 면적·세대수 보강
+    lh_detailed = enrich_lh_detail()  # 매칭된 LH의 주소·일정·공고전문 보강
     sent = notify_new_matches() if notify else 0
     return {
         "collected": len(notices),
         "house_types": len(house_types),
         "lh_notices": len(lh_notices),
         "lh_enriched": lh_enriched,
+        "lh_detailed": lh_detailed,
         "evaluated": total,
         "matched": matched,
         "sent": sent,
