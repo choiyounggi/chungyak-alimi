@@ -9,6 +9,22 @@ on:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chungyak
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: chungyak
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U chungyak"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://chungyak:changeme@127.0.0.1:5432/chungyak
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -39,7 +39,7 @@ pip install -e ".[dev]"
 
 - [x] Phase 0 — 스캐폴딩 + DB
 - [ ] Phase 1 — 수집(청약홈 분양정보)
-- [ ] Phase 2 — 저장(upsert·신규감지)
+- [x] Phase 2 — 저장(upsert·신규감지)
 - [ ] Phase 3 — 주택형/LH 확장
 - [ ] Phase 4 — 정제(필터 매칭)
 - [ ] Phase 5 — 알림(텔레그램)

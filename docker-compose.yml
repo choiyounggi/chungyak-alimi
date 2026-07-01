@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: chungyak
     ports:
-      - "5432:5432"
+      # 호스트 포트는 DB_HOST_PORT 로 조정(로컬에서 5432가 다른 SSH터널/DB에 점유된 경우 5433 등).
+      - "${DB_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
