@@ -17,8 +17,16 @@ from ..filters import load_filter_config
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_SESSION_SECRET = "chungyak-alimi-dev-secret-change-me"
+
 app = FastAPI(title="청약 알리미")
-app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, max_age=60 * 60 * 24 * 14)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    https_only=settings.session_https_only,  # HTTPS 전용 쿠키(Secure)
+    same_site="lax",
+    max_age=60 * 60 * 24 * 14,
+)
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # 특별공급 세대수 필드(raw) → 라벨
@@ -46,6 +54,12 @@ if not settings.web_user or not settings.web_password:
     logger.warning(
         "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 대시보드가 인증 없이 노출됩니다. "
         "외부 공개 시 반드시 설정하세요."
+    )
+elif settings.session_secret == _DEFAULT_SESSION_SECRET:
+    # 인증은 켰지만 세션 서명키가 기본값이면, 키를 아는 누구나 authed 쿠키를 위조해 우회 가능
+    logger.warning(
+        "SESSION_SECRET이 기본값입니다 — 세션 쿠키 위조로 인증 우회 위험. "
+        ".env에 랜덤 SESSION_SECRET(예: openssl rand -hex 32)을 설정하세요."
     )
 
 
@@ -174,8 +188,10 @@ def notice_detail_data(session, n) -> dict:
     add("당첨자발표", raw.get("PRZWNER_PRESNATN_DE"))
     add("계약", _range(raw, "CNTRCT_CNCLS_BGNDE", "CNTRCT_CNCLS_ENDDE"))
     if not schedule:  # LH 등 — ORM 컬럼 기반 접수 일정으로 대체
-        if n.rcept_bgnde or n.rcept_endde:
+        if n.rcept_bgnde and n.rcept_endde:
             schedule.append(("접수", f"{n.rcept_bgnde} ~ {n.rcept_endde}"))
+        elif n.rcept_bgnde or n.rcept_endde:
+            schedule.append(("접수", str(n.rcept_bgnde or n.rcept_endde)))
 
     regs = [label for f, label in REGULATION_FLAGS.items() if raw.get(f) == "Y"]
     if raw.get("MDAT_TRGET_AREA_SECD") not in (None, "N", ""):

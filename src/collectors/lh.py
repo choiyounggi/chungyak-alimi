@@ -158,6 +158,14 @@ def _ymd(s) -> str | None:
     return f"{s[0:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else (s or None)
 
 
+def _range_str(st, ed) -> str | None:
+    """시작·종료를 'st ~ ed'로. 한쪽만 있으면 그것만, 둘 다 없으면 None('~ None' 방지)."""
+    a, b = _ymd(st), _ymd(ed)
+    if a and b:
+        return f"{a} ~ {b}"
+    return a or b or None
+
+
 def fetch_lh_detail(
     *,
     pan_id: str,
@@ -193,15 +201,13 @@ def fetch_lh_detail(
         ).strip()
         schedule = []
         for r in _extract_ds_list(body, "dsSplScdl"):
-            sbm_st, sbm_ed = r.get("PZWR_PPR_SBM_ST_DT"), r.get("PZWR_PPR_SBM_ED_DT")
-            ctrt_st, ctrt_ed = r.get("CTRT_ST_DT"), r.get("CTRT_ED_DT")
             schedule.append(
                 {
                     "gubun": r.get("HS_SBSC_ACP_TRG_CD_NM"),
                     "acp": r.get("ACP_DTTM"),
                     "anc": _ymd(r.get("PZWR_ANC_DT")),
-                    "sbm": f"{_ymd(sbm_st)} ~ {_ymd(sbm_ed)}" if sbm_st else None,
-                    "ctrt": f"{_ymd(ctrt_st)} ~ {_ymd(ctrt_ed)}" if ctrt_st else None,
+                    "sbm": _range_str(r.get("PZWR_PPR_SBM_ST_DT"), r.get("PZWR_PPR_SBM_ED_DT")),
+                    "ctrt": _range_str(r.get("CTRT_ST_DT"), r.get("CTRT_ED_DT")),
                 }
             )
         return {
