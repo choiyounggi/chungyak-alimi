@@ -115,6 +115,14 @@ class MatchResult(Base):
     evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class NotifyLog(Base):
+    __tablename__ = "notify_log"
+
+    pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
+    channel: Mapped[str] = mapped_column(String, primary_key=True, default="telegram")
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 engine = create_engine(settings.database_url, future=True)
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
@@ -276,3 +284,44 @@ def evaluate_all(
     finally:
         if own:
             session.close()
+
+
+def pending_notifications(
+    *, channel: str = "telegram", session: Session | None = None
+) -> list[Notice]:
+    """매칭됐지만 아직 해당 채널로 발송하지 않은 공고 목록."""
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        already = select(NotifyLog.pblanc_no).where(NotifyLog.channel == channel)
+        q = (
+            select(Notice)
+            .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
+            .where(MatchResult.matched.is_(True), Notice.pblanc_no.not_in(already))
+            .order_by(Notice.rcept_endde)
+        )
+        return list(session.scalars(q).all())
+    finally:
+        if own:
+            session.close()
+
+
+def mark_notified(pblanc_no: str, *, channel: str = "telegram", session: Session | None = None) -> None:
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        stmt = pg_insert(NotifyLog).values(pblanc_no=pblanc_no, channel=channel)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["pblanc_no", "channel"])
+        session.execute(stmt)
+        session.commit()
+    finally:
+        if own:
+            session.close()
+
+
+def house_types_of(pblanc_no: str, *, session: Session) -> list[NoticeHouseType]:
+    return list(
+        session.scalars(
+            select(NoticeHouseType).where(NoticeHouseType.pblanc_no == pblanc_no)
+        ).all()
+    )
