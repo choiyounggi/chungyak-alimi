@@ -9,6 +9,7 @@ from ..config import settings
 
 LH_BASE = "https://apis.data.go.kr/B552555"
 LIST_PATH = "/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1"
+SPL_PATH = "/lhLeaseNoticeSplInfo1/getLeaseNoticeSplInfo1"
 
 # 상위매물유형: 05 분양주택, 06 임대주택, 39 신혼희망타운, 13 주거복지
 DEFAULT_TYPES = ("05", "06", "39", "13")
@@ -75,11 +76,87 @@ class LhNotice(BaseModel):
         return str(v).replace(".", "-").strip()  # "2026.07.14" → "2026-07-14"
 
 
-def _extract_ds_list(body) -> list[dict]:
+def _extract_ds_list(body, key: str = "dsList") -> list[dict]:
     for block in body if isinstance(body, list) else []:
-        if isinstance(block, dict) and "dsList" in block:
-            return block["dsList"] or []
+        if isinstance(block, dict) and key in block:
+            return block[key] or []
     return []
+
+
+class LhSupply(BaseModel):
+    """LH 공급정보(주택형별 면적·세대수). 분양가는 LH API 미제공('공고문 참조')."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow", protected_namespaces=())
+
+    house_ty: str = Field(alias="HTY_NNA")          # 주택형
+    suply_ar: float | None = Field(default=None, alias="SPL_AR")   # 공급면적(㎡)
+    suply_hshldco: int | None = Field(default=None, alias="HSH_CNT")  # 세대수
+
+    # notice_house_type 호환용 (LH 미제공)
+    pblanc_no: str = ""
+    house_manage_no: str | None = None
+    model_no: str | None = None
+    lttot_top_amount: int | None = None  # LH 분양가 없음
+    spsply_hshldco: int | None = None
+
+    raw: dict = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _stash_raw(cls, data):
+        if isinstance(data, dict) and "raw" not in data:
+            return {**data, "raw": dict(data)}
+        return data
+
+    @field_validator("suply_ar", "suply_hshldco", mode="before")
+    @classmethod
+    def _num_or_none(cls, v):
+        if v in ("", None):
+            return None
+        try:
+            float(v)
+        except (TypeError, ValueError):
+            return None  # "공고문 참조" 같은 텍스트 → None
+        return v
+
+
+def fetch_lh_supply(
+    *,
+    pan_id: str,
+    ccr: str | None,
+    spl: str | None,
+    upp: str | None,
+    ais: str | None,
+    client: httpx.Client | None = None,
+) -> list[LhSupply]:
+    """특정 LH 공고(PAN_ID)의 공급정보(주택형별 면적·세대수)를 조회한다."""
+    own_client = client is None
+    client = client or httpx.Client(timeout=30.0)
+    try:
+        resp = client.get(
+            LH_BASE + SPL_PATH,
+            params={
+                "serviceKey": settings.odcloud_api_key,
+                "PAN_ID": pan_id,
+                "CCR_CNNT_SYS_DS_CD": ccr,
+                "SPL_INF_TP_CD": spl,
+                "UPP_AIS_TP_CD": upp,
+                "AIS_TP_CD": ais,
+            },
+        )
+        resp.raise_for_status()
+        rows = _extract_ds_list(resp.json(), "dsList01")
+        out = []
+        for row in rows:
+            if not row.get("HTY_NNA"):
+                continue
+            item = LhSupply.model_validate(row)
+            item.pblanc_no = pan_id
+            out.append(item)
+        return out
+    finally:
+        if own_client:
+            client.close()
 
 
 def fetch_lh_notices(

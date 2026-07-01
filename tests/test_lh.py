@@ -5,7 +5,13 @@ from datetime import date
 import httpx
 import pytest
 
-from src.collectors.lh import LhNotice, fetch_lh_notices, normalize_region
+from src.collectors.lh import (
+    LhNotice,
+    LhSupply,
+    fetch_lh_notices,
+    fetch_lh_supply,
+    normalize_region,
+)
 from src.filters import FilterConfig, match_notice
 
 SAMPLE_LH = {
@@ -74,3 +80,38 @@ def test_lh_region_mismatch():
     matched, fails = match_notice(n, [], cfg, today=date(2026, 7, 1))
     assert matched is False
     assert any("지역" in f for f in fails)
+
+
+SPL_RESPONSE = [
+    {"dsSch": [{"PAN_ID": "x"}]},
+    {
+        "dsList01": [
+            {"HTY_NNA": "84.9500A", "SPL_AR": "111.8836", "DDO_AR": "84.95",
+             "HSH_CNT": "10", "LS_GMY": "공고문 참조"},
+            {"HTY_NNA": "75.8400A", "SPL_AR": "99.8853", "DDO_AR": "75.84",
+             "HSH_CNT": "3", "LS_GMY": "공고문 참조"},
+        ],
+        "resHeader": [{"SS_CODE": "Y"}],
+    },
+]
+
+
+# ── 공급정보 파싱: 면적·세대수, 분양가는 None ──
+def test_parse_lh_supply():
+    s = LhSupply.model_validate(SPL_RESPONSE[1]["dsList01"][0])
+    assert s.house_ty == "84.9500A"
+    assert s.suply_ar == 111.8836
+    assert s.suply_hshldco == 10
+    assert s.lttot_top_amount is None  # LH 분양가 미제공
+
+
+# ── 공급정보 수집: dsList01 파싱 + pblanc_no 주입 ──
+def test_fetch_lh_supply():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=SPL_RESPONSE)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        out = fetch_lh_supply(pan_id="P9", ccr="03", spl="051", upp="05", ais="05", client=c)
+    assert len(out) == 2
+    assert all(s.pblanc_no == "P9" for s in out)
+    assert out[0].suply_ar == 111.8836
