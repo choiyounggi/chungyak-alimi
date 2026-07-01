@@ -70,8 +70,22 @@ def test_index_renders(seeded):
     assert SAMPLE["HOUSE_NM"] in r.text
 
 
-# ── healthz ──
+# ── healthz (인증 불필요) ──
 def test_healthz():
     r = TestClient(app).get("/healthz")
     assert r.status_code == 200
     assert r.json() == {"ok": True}
+
+
+# ── 인증: 자격증명 설정 시 미인증 401 ──
+def test_auth_required_when_configured(seeded, monkeypatch):
+    from src.web import app as webapp
+
+    monkeypatch.setattr(webapp.settings, "web_user", "me")
+    monkeypatch.setattr(webapp.settings, "web_password", "pw")
+    client = TestClient(app)
+    assert client.get("/").status_code == 401  # 미인증
+    ok = client.get("/", auth=("me", "pw"))
+    assert ok.status_code == 200  # 올바른 자격증명
+    bad = client.get("/", auth=("me", "wrong"))
+    assert bad.status_code == 401  # 틀린 비번

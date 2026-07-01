@@ -1,17 +1,43 @@
 from __future__ import annotations
 
+import secrets
 from datetime import date
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
+from ..config import settings
 from ..db import MatchResult, Notice, SessionLocal, house_types_of
 from ..filters import load_filter_config
 
 app = FastAPI(title="청약 알리미")
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+_security = HTTPBasic(auto_error=False)
+
+
+def require_login(
+    credentials: Annotated[HTTPBasicCredentials | None, Depends(_security)],
+) -> None:
+    """web_user/web_password 가 설정돼 있으면 Basic 인증을 강제한다(외부공개용).
+
+    설정이 비어있으면(로컬 전용) 인증을 건너뛴다.
+    """
+    if not settings.web_user or not settings.web_password:
+        return
+    ok = credentials is not None and (
+        secrets.compare_digest(credentials.username, settings.web_user)
+        and secrets.compare_digest(credentials.password, settings.web_password)
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="인증이 필요합니다",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 
 def matched_dashboard(session, today: date | None = None) -> list[dict]:
@@ -50,7 +76,7 @@ def healthz() -> dict:
 
 
 @app.get("/")
-def index(request: Request):
+def index(request: Request, _: Annotated[None, Depends(require_login)] = None):
     cfg = load_filter_config()
     with SessionLocal() as session:
         items = matched_dashboard(session)
