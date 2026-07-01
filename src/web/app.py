@@ -4,12 +4,12 @@ import logging
 import secrets
 from datetime import date
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
 from ..db import MatchResult, Notice, SessionLocal, house_types_of
@@ -18,8 +18,8 @@ from ..filters import load_filter_config
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="청약 알리미")
+app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, max_age=60 * 60 * 24 * 14)
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-_security = HTTPBasic(auto_error=False)
 
 # 특별공급 세대수 필드(raw) → 라벨
 SPECIAL_SUPPLY_LABELS = {
@@ -49,25 +49,44 @@ if not settings.web_user or not settings.web_password:
     )
 
 
-def require_login(
-    credentials: Annotated[HTTPBasicCredentials | None, Depends(_security)],
-) -> None:
-    """web_user/web_password 가 설정돼 있으면 Basic 인증을 강제한다(외부공개용).
+def _auth_enabled() -> bool:
+    return bool(settings.web_user and settings.web_password)
 
-    설정이 비어있으면(로컬 전용) 인증을 건너뛴다.
-    """
-    if not settings.web_user or not settings.web_password:
-        return
-    ok = credentials is not None and (
-        secrets.compare_digest(credentials.username, settings.web_user)
-        and secrets.compare_digest(credentials.password, settings.web_password)
+
+def _authed(request: Request) -> bool:
+    """인증이 꺼져있으면(로컬) 항상 통과, 켜져있으면 세션 로그인 여부."""
+    return not _auth_enabled() or request.session.get("authed") is True
+
+
+@app.get("/login")
+def login_page(request: Request):
+    if _authed(request):
+        return RedirectResponse("/", status_code=303)
+    return _TEMPLATES.TemplateResponse(request, "login.html", {"error": None})
+
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+):
+    ok = bool(settings.web_user) and (
+        secrets.compare_digest(username, settings.web_user)
+        and secrets.compare_digest(password, settings.web_password)
     )
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="인증이 필요합니다",
-            headers={"WWW-Authenticate": "Basic"},
-        )
+    if ok:
+        request.session["authed"] = True
+        return RedirectResponse("/", status_code=303)
+    return _TEMPLATES.TemplateResponse(
+        request, "login.html", {"error": "아이디 또는 비밀번호가 올바르지 않습니다"}, status_code=401
+    )
+
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
 
 
 def matched_dashboard(session, today: date | None = None) -> list[dict]:
@@ -172,11 +191,9 @@ def healthz() -> dict:
 
 
 @app.get("/notice/{pblanc_no}")
-def notice_detail(
-    pblanc_no: str,
-    request: Request,
-    _: Annotated[None, Depends(require_login)] = None,
-):
+def notice_detail(pblanc_no: str, request: Request):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
     with SessionLocal() as session:
         n = session.scalar(select(Notice).where(Notice.pblanc_no == pblanc_no))
         if n is None:
@@ -186,7 +203,9 @@ def notice_detail(
 
 
 @app.get("/")
-def index(request: Request, _: Annotated[None, Depends(require_login)] = None):
+def index(request: Request):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
     cfg = load_filter_config()
     with SessionLocal() as session:
         items = matched_dashboard(session)

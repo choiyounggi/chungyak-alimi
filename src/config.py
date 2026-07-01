@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # 웹 대시보드 로그인(외부공개 시 필수). 비우면 인증 없음(로컬 전용).
     web_user: str = ""
     web_password: str = ""
+    # 세션 쿠키 서명 키(고정해야 재시작 후에도 로그인 유지)
+    session_secret: str = "chungyak-alimi-dev-secret-change-me"
 
 
 settings = Settings()
