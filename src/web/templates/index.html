@@ -5,89 +5,97 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>청약 알리미</title>
 <style>
-  :root{--bg:#0f1115;--card:#171a21;--line:#262b36;--tx:#e6e9ef;--mut:#9aa4b2;--acc:#4f9cf9;--ok:#3fb950;--warn:#d29922;--danger:#f85149}
+  :root{
+    --carrot:#FF6F0F; --carrot-dark:#E55F00; --carrot-soft:#FFF3EA;
+    --bg:#FFFFFF; --surface:#F7F8F9; --card:#FFFFFF;
+    --tx:#212124; --sub:#4D5159; --mut:#868B94; --line:#EDEEEF;
+    --ok:#00A05B; --warn:#FF8A00; --danger:#F5484A;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif}
-  .wrap{max-width:820px;margin:0 auto;padding:28px 18px 64px}
-  header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-  h1{font-size:22px;margin:0}
-  .sub{color:var(--mut);font-size:13px}
-  .filters{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:14px 0 20px;font-size:13px;color:var(--mut);display:flex;flex-wrap:wrap;gap:6px 14px}
-  .filters b{color:var(--tx)}
-  .count{color:var(--acc);font-weight:700}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;transition:border-color .15s}
-  .card:hover{border-color:#3a4556}
-  .card a.title{color:var(--tx);text-decoration:none;font-size:16px;font-weight:700}
-  .card a.title:hover{color:var(--acc)}
-  .row{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:8px;font-size:13.5px;color:var(--mut)}
-  .row b{color:var(--tx);font-weight:600}
-  .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--line)}
-  .dday-soon{color:var(--danger);border-color:var(--danger)}
-  .dday-mid{color:var(--warn);border-color:var(--warn)}
-  .dday-far{color:var(--ok);border-color:var(--ok)}
-  .dday-pre{color:var(--acc);border-color:var(--acc)}
-  .head-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .area-tag{font-size:12px;color:var(--acc);background:#1d2430;padding:1px 8px;border-radius:5px}
-  .empty{text-align:center;color:var(--mut);padding:48px 0}
-  footer{margin-top:28px;color:var(--mut);font-size:12px;text-align:center}
+  body{margin:0;background:var(--surface);color:var(--tx);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .topbar{background:var(--carrot);color:#fff}
+  .topbar .inner{max-width:840px;margin:0 auto;padding:18px 20px;display:flex;align-items:center;gap:10px}
+  .logo{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  .logo .em{margin-right:4px}
+  .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
+  .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  h1{font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0}
+  .sub{color:var(--mut);font-size:13.5px}
+  .count{color:var(--carrot);font-weight:800}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 22px}
+  .chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;color:var(--sub);font-weight:600}
+  .chip b{color:var(--carrot)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin:12px 0;
+    box-shadow:0 1px 3px rgba(0,0,0,.03);transition:box-shadow .18s,transform .18s}
+  .card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);transform:translateY(-2px)}
+  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  a.title{color:var(--tx);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4}
+  a.title:hover{color:var(--carrot)}
+  .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--sub)}
+  .row b{color:var(--tx);font-weight:700}
+  .area-tag{font-size:12px;font-weight:700;color:var(--carrot);background:var(--carrot-soft);padding:3px 10px;border-radius:999px}
+  .badge{flex:none;display:inline-block;font-size:12.5px;font-weight:800;padding:4px 11px;border-radius:999px;white-space:nowrap}
+  .dday-soon{color:#fff;background:var(--danger)}
+  .dday-mid{color:#fff;background:var(--warn)}
+  .dday-far{color:var(--ok);background:#E6F6EE}
+  .dday-pre{color:var(--carrot);background:var(--carrot-soft)}
+  .addr{color:var(--mut);font-size:13px}
+  .empty{text-align:center;color:var(--mut);padding:64px 0}
+  .empty .em{font-size:40px;display:block;margin-bottom:10px}
+  footer{margin-top:30px;color:var(--mut);font-size:12px;text-align:center}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>🏠 청약 알리미</h1>
-    <span class="sub">{{ today }} 기준 · 관심 공고 <span class="count">{{ items|length }}</span>건</span>
-  </header>
+  <div class="topbar"><div class="inner"><span class="logo">청약 알리미</span></div></div>
+  <div class="wrap">
+    <div class="head">
+      <h1>내 관심 청약</h1>
+      <span class="sub">{{ today }} 기준 · <span class="count">{{ items|length }}</span>건</span>
+    </div>
 
-  <div class="filters">
-    <span>📍 지역 <b>{{ cfg.regions|join(', ') if cfg.regions else '전국' }}</b></span>
-    <span>🏘 유형 <b>{{ cfg.house_types|join(', ') if cfg.house_types else '전체' }}</b></span>
-    <span>🎁 특공 <b>{{ cfg.special_supply|join(', ') if cfg.special_supply else '무관' }}</b></span>
-    <span>💰 분양가 <b>{{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '무관' }}</b></span>
-    <span>⏰ <b>{{ '진행/예정만' if cfg.only_open else '전체' }}</b></span>
-  </div>
+    <div class="filters">
+      <span class="chip">📍 <b>{{ cfg.regions|join(', ') if cfg.regions else '전국' }}</b></span>
+      <span class="chip">🏘 {{ cfg.house_types|join(', ') if cfg.house_types else '전체 유형' }}</span>
+      <span class="chip">🎁 {{ cfg.special_supply|join(', ') if cfg.special_supply else '특공 무관' }}</span>
+      <span class="chip">💰 {{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
+      <span class="chip">⏰ {{ '진행·예정만' if cfg.only_open else '전체' }}</span>
+    </div>
 
-  {% if not items %}
-    <div class="empty">조건에 맞는 진행/예정 공고가 없습니다.</div>
-  {% endif %}
+    {% if not items %}
+      <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
+    {% endif %}
 
-  {% for it in items %}
-  {% set n = it.notice %}
-  <div class="card">
-    <div class="head-row">
-      <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
-      {% if it.dday is not none %}
-        {% if it.dday < 0 %}
-          <span class="badge dday-pre">D+{{ -it.dday }} 접수예정</span>
-        {% elif it.dday <= 3 %}
-          <span class="badge dday-soon">D-{{ it.dday }} 마감임박</span>
-        {% elif it.dday <= 7 %}
-          <span class="badge dday-mid">D-{{ it.dday }}</span>
-        {% else %}
-          <span class="badge dday-far">D-{{ it.dday }}</span>
+    {% for it in items %}
+    {% set n = it.notice %}
+    <div class="card">
+      <div class="head-row">
+        <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
+        {% if it.dday is not none %}
+          {% if it.dday < 0 %}<span class="badge dday-pre">D+{{ -it.dday }} 예정</span>
+          {% elif it.dday <= 3 %}<span class="badge dday-soon">D-{{ it.dday }} 임박</span>
+          {% elif it.dday <= 7 %}<span class="badge dday-mid">D-{{ it.dday }}</span>
+          {% else %}<span class="badge dday-far">D-{{ it.dday }}</span>{% endif %}
         {% endif %}
-      {% endif %}
+      </div>
+      <div class="row">
+        <span class="area-tag">{{ n.area_nm or '-' }}</span>
+        <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
+      </div>
+      {% if it.adres %}<div class="row"><span class="addr">📍 {{ it.adres }}</span></div>{% endif %}
+      <div class="row">
+        <span>🗓 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
+      </div>
+      <div class="row">
+        {% if it.price_lo %}<span>💰 <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
+        {% if it.area_lo %}<span>📐 {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
+        <span>🏢 {{ n.tot_suply_hshldco or '-' }}세대</span>
+      </div>
     </div>
-    <div class="row">
-      <span class="area-tag">{{ n.area_nm or '-' }}</span>
-      <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
-    </div>
-    {% if it.adres %}<div class="row"><span>📍 {{ it.adres }}</span></div>{% endif %}
-    <div class="row">
-      <span>🗓 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
-      {% if n.spsply_rcept_bgnde %}<span>특공 {{ n.spsply_rcept_bgnde }}~{{ n.spsply_rcept_endde }}</span>{% endif %}
-    </div>
-    <div class="row">
-      {% if it.price_lo %}
-        <span>💰 <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>
-      {% endif %}
-      {% if it.area_lo %}<span>📐 {{ '%.1f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.1f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
-      <span>🏢 {{ n.tot_suply_hshldco or '-' }}세대</span>
-    </div>
-  </div>
-  {% endfor %}
+    {% endfor %}
 
-  <footer>chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
-</div>
+    <footer>chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
+  </div>
 </body>
 </html>
