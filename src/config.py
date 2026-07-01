@@ -37,6 +37,9 @@ class Settings(BaseSettings):
 
     # 카카오맵 JavaScript 앱키(상세페이지 지도). 도메인 제한으로 보호됨.
     kakao_js_key: str = ""
+    # V-World 인증키(필지 폴리곤 조회, 서버측)
+    vworld_key: str = ""
+    vworld_domain: str = "https://chungyak.duckdns.org"
 
 
 settings = Settings()

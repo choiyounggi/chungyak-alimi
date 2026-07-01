@@ -194,6 +194,7 @@ def notice_detail_data(session, n) -> dict:
         "builder": raw.get("CNSTRCT_ENTRPS_NM"),
         "mvn": raw.get("MVN_PREARNGE_YM") or lh.get("mvin"),
         "kakao_key": settings.kakao_js_key,
+        "polygon": raw.get("_polygon") or None,
     }
 
 

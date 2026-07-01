@@ -8,6 +8,8 @@ from sqlalchemy import exists, select, update
 
 from .collectors.applyhome import fetch_apt_house_types, fetch_apt_notices
 from .collectors.lh import fetch_lh_detail, fetch_lh_notices, fetch_lh_supply
+from .collectors.vworld import fetch_parcel_polygon
+from .config import settings
 from .db import (
     MatchResult,
     Notice,
@@ -64,6 +66,36 @@ def enrich_lh_supply() -> int:
     return added
 
 
+def enrich_polygons() -> int:
+    """매칭 공고의 주소 → V-World 필지 폴리곤을 raw['_polygon']에 저장. 폴리곤 획득 수 반환."""
+    if not settings.vworld_key:
+        return 0
+    added = 0
+    with SessionLocal() as session:
+        q = (
+            select(Notice)
+            .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
+            .where(MatchResult.matched.is_(True))
+        )
+        for n in session.scalars(q).all():
+            raw = n.raw or {}
+            if "_polygon" in raw:  # 이미 시도함(빈 배열이면 없음)
+                continue
+            addr = raw.get("HSSPLY_ADRES") or n.hsslpy_adres
+            if not addr:
+                continue
+            poly = fetch_parcel_polygon(addr)
+            session.execute(
+                update(Notice)
+                .where(Notice.pblanc_no == n.pblanc_no)
+                .values(raw={**raw, "_polygon": poly or []})
+            )
+            if poly:
+                added += 1
+        session.commit()
+    return added
+
+
 def enrich_lh_detail() -> int:
     """매칭된 LH 공고의 상세(주소·일정·서류제출·공고전문)를 raw에 병합. 처리 건수 반환."""
     added = 0
@@ -107,6 +139,7 @@ def run_batch(*, notify: bool = True) -> dict:
     total, matched = evaluate_all(load_filter_config())
     lh_enriched = enrich_lh_supply()  # 매칭된 LH의 면적·세대수 보강
     lh_detailed = enrich_lh_detail()  # 매칭된 LH의 주소·일정·공고전문 보강
+    polygons = enrich_polygons()      # 매칭 공고의 필지 폴리곤(V-World)
     sent = notify_new_matches() if notify else 0
     return {
         "collected": len(notices),
@@ -114,6 +147,7 @@ def run_batch(*, notify: bool = True) -> dict:
         "lh_notices": len(lh_notices),
         "lh_enriched": lh_enriched,
         "lh_detailed": lh_detailed,
+        "polygons": polygons,
         "evaluated": total,
         "matched": matched,
         "sent": sent,

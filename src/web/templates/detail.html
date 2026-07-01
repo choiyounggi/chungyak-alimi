@@ -138,12 +138,26 @@
       });
       var geocoder = new kakao.maps.services.Geocoder();
       var full = {{ adres | tojson }};
+      var polygonCoords = {{ polygon | tojson }};  // [[lng,lat], ...] 또는 null
       // "외 N개 동 일원" 등 접미사로 실패할 수 있어 앞부분(시군구+동)으로 폴백
       var fallback = full.split(' ').slice(0, 4).join(' ');
+
+      // 필지 폴리곤(있으면) 그리기 + 그 영역으로 지도 맞춤
+      if (polygonCoords && polygonCoords.length) {
+        var path = polygonCoords.map(function (c) { return new kakao.maps.LatLng(c[1], c[0]); });
+        new kakao.maps.Polygon({
+          map: map, path: path, strokeWeight: 2, strokeColor: '#FF6F0F',
+          strokeOpacity: 0.9, fillColor: '#FF6F0F', fillOpacity: 0.25
+        });
+        var bounds = new kakao.maps.LatLngBounds();
+        path.forEach(function (p) { bounds.extend(p); });
+        map.setBounds(bounds);
+      }
+
       function place(result) {
         var pos = new kakao.maps.LatLng(result[0].y, result[0].x);
-        map.setCenter(pos); map.setLevel(4);
         new kakao.maps.Marker({ map: map, position: pos });
+        if (!(polygonCoords && polygonCoords.length)) { map.setCenter(pos); map.setLevel(4); }
       }
       geocoder.addressSearch(full, function (r, s) {
         if (s === kakao.maps.services.Status.OK) { place(r); return; }
