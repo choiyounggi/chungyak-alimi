@@ -106,10 +106,20 @@ def test_login_flow(seeded, monkeypatch):
     assert r.status_code == 200
     assert "로그인" in r.text and "비밀번호" in r.text
 
-    # 틀린 비번 → 401 + 에러 메시지
+    # 틀린 비번 → 401 + 폼 에러 문구
     bad = client.post("/login", data={"username": "me", "password": "wrong"})
     assert bad.status_code == 401
-    assert "올바르지 않" in bad.text
+    assert "아이디 또는 비밀번호가 올바르지 않습니다" in bad.text
+
+    # 아이디 미입력 → 아이디 필드 에러
+    e1 = client.post("/login", data={"username": "", "password": "pw"})
+    assert e1.status_code == 401
+    assert "아이디를 입력해주세요" in e1.text
+
+    # 비밀번호 미입력 → 비번 필드 에러
+    e2 = client.post("/login", data={"username": "me", "password": ""})
+    assert e2.status_code == 401
+    assert "비밀번호를 입력해주세요" in e2.text
 
     # 올바른 로그인 → 세션 → 대시보드 접근
     ok = client.post("/login", data={"username": "me", "password": "pw"})

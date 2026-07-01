@@ -23,12 +23,15 @@
   input{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:12px;font-size:15px;
     background:#fff;color:var(--tx);outline:none;transition:border-color .15s}
   input:focus{border-color:var(--carrot)}
+  input.invalid{border-color:var(--danger);background:#FFF7F7}
   .field{margin-bottom:16px}
+  .field-error{display:none;color:var(--danger);font-size:12.5px;font-weight:600;margin-top:6px}
+  .field.has-error .field-error{display:block}
   button{width:100%;padding:14px;background:var(--carrot);color:#fff;border:none;border-radius:12px;
     font-size:16px;font-weight:800;cursor:pointer;transition:background .15s;margin-top:4px}
   button:hover{background:var(--carrot-dark)}
-  .error{background:#FDECEC;color:var(--danger);border-radius:10px;padding:10px 12px;font-size:13.5px;
-    font-weight:600;margin-bottom:16px}
+  .form-error{background:#FDECEC;color:var(--danger);border-radius:10px;padding:11px 13px;font-size:13.5px;
+    font-weight:600;margin-bottom:16px;display:flex;gap:7px;align-items:center}
 </style>
 </head>
 <body>
@@ -37,15 +40,20 @@
       <div class="title">청약 알리미</div>
       <div class="desc">내 관심 청약을 한눈에</div>
     </div>
-    <form method="post" action="/login">
-      {% if error %}<div class="error">{{ error }}</div>{% endif %}
-      <div class="field">
+    <!-- novalidate: 브라우저 기본 검증 팝업(시스템 알럿) 비활성화 → 서버 인라인 에러로 안내 -->
+    <form method="post" action="/login" novalidate>
+      {% if errors.form %}<div class="form-error">⚠️ {{ errors.form }}</div>{% endif %}
+      <div class="field {{ 'has-error' if errors.username else '' }}">
         <label for="username">아이디</label>
-        <input id="username" name="username" type="text" autocomplete="username" autofocus required>
+        <input id="username" name="username" type="text" autocomplete="username"
+               value="{{ username or '' }}" class="{{ 'invalid' if errors.username else '' }}" autofocus>
+        <div class="field-error">{{ errors.username or '' }}</div>
       </div>
-      <div class="field">
+      <div class="field {{ 'has-error' if errors.password else '' }}">
         <label for="password">비밀번호</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <input id="password" name="password" type="password" autocomplete="current-password"
+               class="{{ 'invalid' if errors.password else '' }}">
+        <div class="field-error">{{ errors.password or '' }}</div>
       </div>
       <button type="submit">로그인</button>
     </form>
