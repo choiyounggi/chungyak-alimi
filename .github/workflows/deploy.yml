@@ -1,0 +1,29 @@
+# 라즈베리파이 배포 (로컬 개발 → GitHub → Pi pull).
+# 시크릿은 모두 GitHub Actions Secrets 로 주입 — 레포에 키를 커밋하지 않는다.
+#   필요 Secrets: PI_HOST, PI_USER, PI_SSH_KEY (배포용 SSH 키)
+# 활성화하려면 아래 `if: false` 를 제거하고 Secrets 를 등록한다. (Phase 7에서 완성)
+
+name: Deploy to Raspberry Pi
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    if: false  # Phase 7에서 활성화
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH (git pull + restart)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PI_HOST }}
+          username: ${{ secrets.PI_USER }}
+          key: ${{ secrets.PI_SSH_KEY }}
+          script: |
+            cd ~/chungyak-alimi
+            git pull --ff-only
+            docker compose up -d db
+            sudo systemctl restart chungyak-collect.timer
+            sudo systemctl restart chungyak-web.service

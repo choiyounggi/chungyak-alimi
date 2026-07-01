@@ -1,0 +1,24 @@
+# ── secrets (절대 커밋 금지) ──
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# data / db
+data/
+*.db
+*.sqlite3
+pgdata/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
