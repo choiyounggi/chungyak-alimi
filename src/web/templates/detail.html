@@ -104,6 +104,9 @@
 
     <section>
       <h2>📍 위치 · 문의</h2>
+      {% if adres and kakao_key %}
+      <div id="map" style="width:100%;height:300px;border-radius:12px;margin-bottom:14px;background:#EDEEEF"></div>
+      {% endif %}
       <div class="kv">
         {% if adres %}<div class="k">주소</div><div>{{ adres }}</div>{% endif %}
         {% if builder %}<div class="k">시공사</div><div>{{ builder }}</div>{% endif %}
@@ -125,5 +128,31 @@
       {% if notice.pblanc_url %}<a class="src" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener">📄 원본 공고문(홈페이지) 열기</a>{% endif %}
     </section>
   </div>
+
+  {% if adres and kakao_key %}
+  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services"></script>
+  <script>
+    kakao.maps.load(function () {
+      var map = new kakao.maps.Map(document.getElementById('map'), {
+        center: new kakao.maps.LatLng(37.5665, 126.978), level: 5
+      });
+      var geocoder = new kakao.maps.services.Geocoder();
+      var full = {{ adres | tojson }};
+      // "외 N개 동 일원" 등 접미사로 실패할 수 있어 앞부분(시군구+동)으로 폴백
+      var fallback = full.split(' ').slice(0, 4).join(' ');
+      function place(result) {
+        var pos = new kakao.maps.LatLng(result[0].y, result[0].x);
+        map.setCenter(pos); map.setLevel(4);
+        new kakao.maps.Marker({ map: map, position: pos });
+      }
+      geocoder.addressSearch(full, function (r, s) {
+        if (s === kakao.maps.services.Status.OK) { place(r); return; }
+        geocoder.addressSearch(fallback, function (r2, s2) {
+          if (s2 === kakao.maps.services.Status.OK) { place(r2); }
+        });
+      });
+    });
+  </script>
+  {% endif %}
 </body>
 </html>
