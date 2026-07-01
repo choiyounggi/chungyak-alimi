@@ -62,25 +62,36 @@ def _authed(request: Request) -> bool:
 def login_page(request: Request):
     if _authed(request):
         return RedirectResponse("/", status_code=303)
-    return _TEMPLATES.TemplateResponse(request, "login.html", {"error": None})
+    return _TEMPLATES.TemplateResponse(request, "login.html", {"errors": {}, "username": ""})
 
 
 @app.post("/login")
 def login_submit(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
+    username: str = Form(""),
+    password: str = Form(""),
 ):
-    ok = bool(settings.web_user) and (
-        secrets.compare_digest(username, settings.web_user)
-        and secrets.compare_digest(password, settings.web_password)
-    )
-    if ok:
-        request.session["authed"] = True
-        return RedirectResponse("/", status_code=303)
-    return _TEMPLATES.TemplateResponse(
-        request, "login.html", {"error": "아이디 또는 비밀번호가 올바르지 않습니다"}, status_code=401
-    )
+    errors: dict[str, str] = {}
+    if not username.strip():
+        errors["username"] = "아이디를 입력해주세요"
+    if not password:
+        errors["password"] = "비밀번호를 입력해주세요"
+    if not errors:
+        ok = bool(settings.web_user) and (
+            secrets.compare_digest(username, settings.web_user)
+            and secrets.compare_digest(password, settings.web_password)
+        )
+        if not ok:
+            errors["form"] = "아이디 또는 비밀번호가 올바르지 않습니다"
+    if errors:
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "login.html",
+            {"errors": errors, "username": username},
+            status_code=401,
+        )
+    request.session["authed"] = True
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/logout")
