@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Integer,
@@ -18,6 +19,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from .config import settings
+from .filters import FilterConfig, match_notice
 from .models import ApplyhomeHouseType, ApplyhomeNotice
 
 # ApplyhomeNotice → notice 테이블에 저장할 컬럼(공고 식별/일정/필터축)
@@ -102,6 +104,15 @@ _HT_COLS = (
     "suply_hshldco",
     "spsply_hshldco",
 )
+
+
+class MatchResult(Base):
+    __tablename__ = "match_result"
+
+    pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
+    matched: Mapped[bool] = mapped_column(Boolean)
+    fail_reasons: Mapped[list] = mapped_column(JSONB, default=list)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 engine = create_engine(settings.database_url, future=True)
@@ -207,6 +218,59 @@ def upsert_house_types(
         session.execute(stmt)
         session.commit()
         return len(rows)
+    finally:
+        if own:
+            session.close()
+
+
+def save_match_results(
+    results: list[tuple[str, bool, list[str]]],
+    *,
+    session: Session | None = None,
+) -> int:
+    """(pblanc_no, matched, fail_reasons) 목록을 match_result 에 upsert."""
+    if not results:
+        return 0
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        deduped = {r[0]: r for r in results}
+        rows = [
+            {"pblanc_no": p, "matched": m, "fail_reasons": fr}
+            for (p, m, fr) in deduped.values()
+        ]
+        stmt = pg_insert(MatchResult).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["pblanc_no"],
+            set_={
+                "matched": stmt.excluded.matched,
+                "fail_reasons": stmt.excluded.fail_reasons,
+                "evaluated_at": func.now(),
+            },
+        )
+        session.execute(stmt)
+        session.commit()
+        return len(rows)
+    finally:
+        if own:
+            session.close()
+
+
+def evaluate_all(cfg: FilterConfig, *, session: Session | None = None) -> tuple[int, int]:
+    """DB의 모든 공고를 필터로 평가해 match_result 에 저장. (평가건수, 매칭건수) 반환."""
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        notices = session.scalars(select(Notice)).all()
+        results: list[tuple[str, bool, list[str]]] = []
+        for n in notices:
+            hts = session.scalars(
+                select(NoticeHouseType).where(NoticeHouseType.pblanc_no == n.pblanc_no)
+            ).all()
+            matched, fails = match_notice(n, hts, cfg)
+            results.append((n.pblanc_no, matched, fails))
+        save_match_results(results, session=session)
+        return (len(results), sum(1 for _, m, _ in results if m))
     finally:
         if own:
             session.close()

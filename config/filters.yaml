@@ -2,10 +2,10 @@
 # 코드가 아닌 이 설정으로 관리 → 언제든 조정 가능. (Phase 4 정제 단계에서 사용)
 # 빈 배열([]) 또는 null 은 "제한 없음"을 의미한다.
 
-regions: []            # 관심 지역 (area_nm): 예) ["서울", "경기", "인천"]  / [] = 전국
-house_types: []        # 주택유형: 예) ["APT"] / ["APT", "오피스텔"]        / [] = 전체
-supply_types: []       # 공급유형: 예) ["국민", "민영"]                     / [] = 전체
-special_supply: []     # 관심 특별공급: 예) ["신혼부부", "생애최초", "다자녀"]
-min_households: null   # 총공급세대 하한: 예) 100 / null = 제한없음
-price_max_manwon: null # 분양가 상한(만원): 예) 80000 / null = 제한없음
-exclude_keywords: []   # 제외 키워드: 예) ["임의공급", "생활숙박"]
+regions: ["서울", "경기", "인천"]   # 관심 지역 (area_nm). [] = 전국
+house_types: []                    # 주택유형: [] = 전체(모두)
+supply_types: []                   # 공급유형: [] = 전체(모두)
+special_supply: ["생애최초", "신혼부부"]  # 관심 특별공급
+min_households: null               # 총공급세대 하한: null = 제한없음
+price_max_manwon: 80000            # 분양가 상한(만원): 8억
+exclude_keywords: []               # 제외 키워드
