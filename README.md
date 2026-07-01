@@ -42,7 +42,7 @@ pip install -e ".[dev]"
 - [x] Phase 2 — 저장(upsert·신규감지)
 - [x] Phase 3 — 주택형 확장 (LH 목록 API 대기)
 - [x] Phase 4 — 정제(필터 매칭)
-- [ ] Phase 5 — 알림(텔레그램)
+- [x] Phase 5 — 알림(텔레그램)
 - [ ] Phase 6 — 웹 대시보드
 - [ ] Phase 7 — 배포(systemd + Cloudflare Tunnel)
 - [ ] Phase 8 — 문서
