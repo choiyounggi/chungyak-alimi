@@ -61,6 +61,11 @@ def test_send_telegram_payload():
 
 
 # ── 에러: 토큰/chat_id 없으면 예외 ──
-def test_send_requires_credentials():
+def test_send_requires_credentials(monkeypatch):
+    # .env 에 값이 있어도 기본 폴백까지 비워 '자격증명 없음' 경로를 강제
+    from src import notify
+
+    monkeypatch.setattr(notify.settings, "tg_bot_token", "")
+    monkeypatch.setattr(notify.settings, "tg_chat_id", "")
     with pytest.raises(RuntimeError):
         send_telegram("hi", token="", chat_id="")

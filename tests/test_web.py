@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import delete
+
+from src.db import (
+    MatchResult,
+    Notice,
+    NoticeHouseType,
+    SessionLocal,
+    engine,
+    init_db,
+    save_match_results,
+    upsert_house_types,
+    upsert_notices,
+)
+from src.models import ApplyhomeHouseType, ApplyhomeNotice
+from src.web.app import app, matched_dashboard
+
+from test_applyhome import SAMPLE
+from test_housetype import SAMPLE_HT
+
+
+def _db_available() -> bool:
+    try:
+        engine.connect().close()
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(not _db_available(), reason="postgres 미가용")
+
+
+@pytest.fixture
+def seeded():
+    init_db()
+    s = SessionLocal()
+    for t in (MatchResult, NoticeHouseType, Notice):
+        s.execute(delete(t))
+    s.commit()
+    # 매칭 공고 1건 + 주택형 + match_result
+    n = ApplyhomeNotice.model_validate({**SAMPLE, "PBLANC_NO": "W1", "HOUSE_MANAGE_NO": "W1"})
+    ht = ApplyhomeHouseType.model_validate({**SAMPLE_HT, "PBLANC_NO": "W1"})
+    upsert_notices([n], session=s)
+    upsert_house_types([ht], session=s)
+    save_match_results([("W1", True, [])], session=s)
+    yield s
+    for t in (MatchResult, NoticeHouseType, Notice):
+        s.execute(delete(t))
+    s.commit()
+    s.close()
+
+
+# ── 대시보드 데이터: 매칭 공고 + 분양가 계산 ──
+def test_matched_dashboard(seeded):
+    items = matched_dashboard(seeded)
+    assert len(items) == 1
+    it = items[0]
+    assert it["notice"].pblanc_no == "W1"
+    assert it["price_lo"] == 50724  # SAMPLE_HT LTTOT_TOP_AMOUNT
+
+
+# ── 인덱스 렌더: 200 + 공고명 포함 ──
+def test_index_renders(seeded):
+    client = TestClient(app)
+    r = client.get("/")
+    assert r.status_code == 200
+    assert SAMPLE["HOUSE_NM"] in r.text
+
+
+# ── healthz ──
+def test_healthz():
+    r = TestClient(app).get("/healthz")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
