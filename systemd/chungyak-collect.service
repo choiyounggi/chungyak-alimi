@@ -1,0 +1,9 @@
+[Unit]
+Description=chungyak-alimi 청약 수집 배치 (수집→저장→평가→알림)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/dch0202/chungyak-alimi
+ExecStart=/home/dch0202/chungyak-alimi/.venv/bin/python -m src.pipeline

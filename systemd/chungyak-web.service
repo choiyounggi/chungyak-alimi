@@ -1,0 +1,13 @@
+[Unit]
+Description=chungyak-alimi 웹 대시보드 (FastAPI/uvicorn)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/dch0202/chungyak-alimi
+ExecStart=/home/dch0202/chungyak-alimi/.venv/bin/python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
