@@ -81,7 +81,8 @@ def match_notice(
             fails.append("분양가초과")
 
     # 특별공급: 관심 특공 세대수 > 0 인 주택형이 하나라도 있으면 통과.
-    if cfg.special_supply:
+    # 주택형 정보가 아예 없는 소스(LH 목록 등)는 특공 판정을 보류(통과)한다.
+    if cfg.special_supply and house_types:
         keys = [SPECIAL_SUPPLY_KEYS[s] for s in cfg.special_supply if s in SPECIAL_SUPPLY_KEYS]
         has = any(_to_int(ht.raw.get(k)) > 0 for ht in house_types for k in keys)
         if keys and not has:

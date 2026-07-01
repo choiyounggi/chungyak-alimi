@@ -4,6 +4,7 @@ import json
 import sys
 
 from .collectors.applyhome import fetch_apt_house_types, fetch_apt_notices
+from .collectors.lh import fetch_lh_notices
 from .db import (
     SessionLocal,
     evaluate_all,
@@ -22,13 +23,16 @@ def run_batch(*, notify: bool = True) -> dict:
     init_db()
     notices = fetch_apt_notices()
     house_types = fetch_apt_house_types()
-    upsert_notices(notices)
+    lh_notices = fetch_lh_notices()
+    upsert_notices(notices, source="applyhome")
     upsert_house_types(house_types)
+    upsert_notices(lh_notices, source="lh")
     total, matched = evaluate_all(load_filter_config())
     sent = notify_new_matches() if notify else 0
     return {
         "collected": len(notices),
         "house_types": len(house_types),
+        "lh_notices": len(lh_notices),
         "evaluated": total,
         "matched": matched,
         "sent": sent,
