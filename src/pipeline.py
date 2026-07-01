@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 
 from sqlalchemy import exists, select
@@ -21,6 +22,17 @@ from .db import (
 )
 from .filters import load_filter_config
 from .notify import notify_new_matches
+
+logger = logging.getLogger(__name__)
+
+
+def _safe(fn, label: str, default):
+    """collector 하나가 실패해도 배치 전체를 중단하지 않는다(부분 수집 허용)."""
+    try:
+        return fn()
+    except Exception:
+        logger.exception("%s 실패 — 이 소스는 건너뜀", label)
+        return default
 
 
 def enrich_lh_supply() -> int:
@@ -55,9 +67,9 @@ def enrich_lh_supply() -> int:
 def run_batch(*, notify: bool = True) -> dict:
     """수집 → 저장 → 평가 → (알림). 배치 1회."""
     init_db()
-    notices = fetch_apt_notices()
-    house_types = fetch_apt_house_types()
-    lh_notices = fetch_lh_notices()
+    notices = _safe(fetch_apt_notices, "청약홈 공고 수집", [])
+    house_types = _safe(fetch_apt_house_types, "청약홈 주택형 수집", [])
+    lh_notices = _safe(fetch_lh_notices, "LH 공고 수집", [])
     upsert_notices(notices, source="applyhome")
     upsert_house_types(house_types)
     upsert_notices(lh_notices, source="lh")
@@ -85,6 +97,9 @@ def backfill_notified() -> int:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     if "--backfill" in sys.argv:
         result = run_batch(notify=False)
         result["backfilled"] = backfill_notified()

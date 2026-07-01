@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 LH_BASE = "https://apis.data.go.kr/B552555"
 LIST_PATH = "/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1"
@@ -73,7 +76,19 @@ class LhNotice(BaseModel):
     def _lhdate(cls, v):
         if not v:
             return None
-        return str(v).replace(".", "-").strip()  # "2026.07.14" → "2026-07-14"
+        s = str(v).replace(".", "-").strip()  # "2026.07.14" → "2026-07-14"
+        # 날짜 형식이 아닌 텍스트("공고문 참조" 등)는 None 으로 — ValidationError 방지
+        parts = s.split("-")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            return None
+        return s
+
+    @field_validator("pblanc_url", mode="before")
+    @classmethod
+    def _safe_url(cls, v):
+        if v and str(v).startswith(("http://", "https://")):
+            return v
+        return None
 
 
 def _extract_ds_list(body, key: str = "dsList") -> list[dict]:
@@ -81,6 +96,18 @@ def _extract_ds_list(body, key: str = "dsList") -> list[dict]:
         if isinstance(block, dict) and key in block:
             return block[key] or []
     return []
+
+
+def _ss_ok(body, *, where: str) -> bool:
+    """LH API 는 HTTP 200 으로 오류를 반환 — resHeader.SS_CODE 가 'Y' 인지 확인."""
+    for block in body if isinstance(body, list) else []:
+        if isinstance(block, dict) and "resHeader" in block:
+            hdr = (block["resHeader"] or [{}])[0]
+            code = hdr.get("SS_CODE")
+            if code and code != "Y":
+                logger.warning("LH %s 오류 SS_CODE=%s: %s", where, code, hdr.get("SS_MSG", ""))
+                return False
+    return True
 
 
 class LhSupply(BaseModel):
@@ -145,12 +172,19 @@ def fetch_lh_supply(
             },
         )
         resp.raise_for_status()
-        rows = _extract_ds_list(resp.json(), "dsList01")
+        body = resp.json()
+        if not _ss_ok(body, where=f"공급정보(PAN_ID={pan_id})"):
+            return []
+        rows = _extract_ds_list(body, "dsList01")
         out = []
         for row in rows:
             if not row.get("HTY_NNA"):
                 continue
-            item = LhSupply.model_validate(row)
+            try:
+                item = LhSupply.model_validate(row)
+            except ValidationError as e:
+                logger.warning("LH 공급정보 파싱 실패 스킵(PAN_ID=%s): %s", pan_id, e)
+                continue
             item.pblanc_no = pan_id
             out.append(item)
         return out
@@ -192,11 +226,18 @@ def fetch_lh_notices(
                     },
                 )
                 resp.raise_for_status()
-                rows = _extract_ds_list(resp.json())
+                body = resp.json()
+                if not _ss_ok(body, where=f"목록(type={tp},page={page})"):
+                    break
+                rows = _extract_ds_list(body)
                 if not rows:
                     break
                 for row in rows:
-                    n = LhNotice.model_validate(row)
+                    try:
+                        n = LhNotice.model_validate(row)
+                    except ValidationError as e:
+                        logger.warning("LH 공고 파싱 실패 스킵: %s", e)
+                        continue
                     if n.pblanc_no not in seen:  # 유형 간 중복 제거
                         seen.add(n.pblanc_no)
                         out.append(n)

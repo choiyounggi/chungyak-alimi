@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
+from pydantic import ValidationError
 
 from ..config import settings
 from ..models import ApplyhomeHouseType, ApplyhomeNotice
+
+logger = logging.getLogger(__name__)
 
 # 청약홈 APT 분양정보 상세조회 / 주택형별 상세조회
 DETAIL_PATH = "/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail"
@@ -38,7 +43,11 @@ def _fetch_all(
             )
             resp.raise_for_status()
             data = resp.json().get("data", []) or []
-            rows_out.extend(model.model_validate(row) for row in data)
+            for row in data:
+                try:
+                    rows_out.append(model.model_validate(row))
+                except ValidationError as e:
+                    logger.warning("%s 파싱 실패 스킵(page=%s): %s", path, page, e)
             if len(data) < per_page:
                 break
     finally:

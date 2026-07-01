@@ -4,6 +4,7 @@ from datetime import date
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from src.collectors.applyhome import fetch_apt_notices
 from src.models import ApplyhomeNotice
@@ -76,8 +77,16 @@ def test_stops_when_page_not_full():
 # ── 에러: 필수 필드(PBLANC_NO) 누락 → ValidationError ──
 def test_missing_required_field_raises():
     bad = {k: v for k, v in SAMPLE.items() if k != "PBLANC_NO"}
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ApplyhomeNotice.model_validate(bad)
+
+
+# ── javascript: URL 차단(XSS 방어) ──
+def test_javascript_url_stripped():
+    n = ApplyhomeNotice.model_validate({**SAMPLE, "PBLANC_URL": "javascript:alert(1)"})
+    assert n.pblanc_url is None
+    ok = ApplyhomeNotice.model_validate({**SAMPLE, "PBLANC_URL": "https://ok.kr"})
+    assert ok.pblanc_url == "https://ok.kr"
 
 
 # ── 선택 필드 누락은 허용 ──

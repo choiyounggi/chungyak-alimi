@@ -4,6 +4,7 @@ from datetime import date
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from src.collectors.lh import (
     LhNotice,
@@ -49,8 +50,22 @@ def test_parse_lh_notice():
 # ── 경계: 필수 PAN_ID 없으면 에러 ──
 def test_missing_pan_id_raises():
     d = {k: v for k, v in SAMPLE_LH.items() if k != "PAN_ID"}
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         LhNotice.model_validate(d)
+
+
+# ── 날짜 텍스트값("공고문 참조")은 None (크래시 방지) ──
+def test_lhdate_text_becomes_none():
+    n = LhNotice.model_validate({**SAMPLE_LH, "CLSG_DT": "공고문 참조"})
+    assert n.rcept_endde is None
+
+
+# ── javascript: URL 차단 ──
+def test_lh_javascript_url_stripped():
+    n = LhNotice.model_validate({**SAMPLE_LH, "DTL_URL": "javascript:alert(1)"})
+    assert n.pblanc_url is None
+    ok = LhNotice.model_validate({**SAMPLE_LH, "DTL_URL": "https://apply.lh.or.kr/x"})
+    assert ok.pblanc_url == "https://apply.lh.or.kr/x"
 
 
 # ── 수집: 유형 간 중복 PAN_ID 제거 ──
@@ -103,6 +118,16 @@ def test_parse_lh_supply():
     assert s.suply_ar == 111.8836
     assert s.suply_hshldco == 10
     assert s.lttot_top_amount is None  # LH 분양가 미제공
+
+
+# ── C1 회귀 방어: LH 보강(특공 키 없는 주택형)돼도 특공 필터 통과 ──
+def test_lh_special_filter_holds_after_enrichment():
+    cfg = FilterConfig(regions=["경남"], special_supply=["생애최초", "신혼부부"])
+    n = LhNotice.model_validate(SAMPLE_LH)
+    ht = LhSupply.model_validate(SPL_RESPONSE[1]["dsList01"][0])  # raw엔 특공 세대수 키 없음
+    matched, fails = match_notice(n, [ht], cfg, today=date(2026, 7, 1))
+    assert matched is True  # 보강돼도 특공 판정 보류 → 탈락 안 함
+    assert "특공없음" not in fails
 
 
 # ── 공급정보 수집: dsList01 파싱 + pblanc_no 주입 ──

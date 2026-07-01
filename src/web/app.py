@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import date
 from pathlib import Path
@@ -14,9 +15,17 @@ from ..config import settings
 from ..db import MatchResult, Notice, SessionLocal, house_types_of
 from ..filters import load_filter_config
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="청약 알리미")
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _security = HTTPBasic(auto_error=False)
+
+if not settings.web_user or not settings.web_password:
+    logger.warning(
+        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 대시보드가 인증 없이 노출됩니다. "
+        "외부 공개 시 반드시 설정하세요."
+    )
 
 
 def require_login(

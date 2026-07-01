@@ -59,6 +59,14 @@ class ApplyhomeNotice(BaseModel):
             return None
         return v
 
+    @field_validator("pblanc_url", mode="before")
+    @classmethod
+    def _safe_url(cls, v):
+        # href 로 렌더되므로 http(s) 스킴만 허용(javascript: 등 차단)
+        if v and str(v).startswith(("http://", "https://")):
+            return v
+        return None
+
 
 class ApplyhomeHouseType(BaseModel):
     """청약홈 APT 주택형별 상세 1건 (면적·분양가). getAPTLttotPblancMdl"""

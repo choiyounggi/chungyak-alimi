@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import delete, func, select
 
 from src.db import (
@@ -52,7 +53,7 @@ def test_empty_price_area_none():
 # ── 에러: 필수 house_ty 누락 ──
 def test_missing_house_ty_raises():
     d = {k: v for k, v in SAMPLE_HT.items() if k != "HOUSE_TY"}
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ApplyhomeHouseType.model_validate(d)
 
 

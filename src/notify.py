@@ -52,7 +52,9 @@ def send_telegram(
                 "disable_web_page_preview": True,
             },
         )
-        resp.raise_for_status()
+        # raise_for_status 예외 메시지엔 URL(=봇 토큰)이 포함되므로 그대로 전파하지 않는다.
+        if resp.status_code >= 400:
+            raise RuntimeError(f"텔레그램 발송 실패: HTTP {resp.status_code}")
         return resp.json()
     finally:
         if own:
