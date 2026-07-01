@@ -5,133 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ notice.house_nm }} · 청약 알리미</title>
 <style>
-  :root{--bg:#0f1115;--card:#171a21;--line:#262b36;--tx:#e6e9ef;--mut:#9aa4b2;--acc:#4f9cf9;--ok:#3fb950;--warn:#d29922;--danger:#f85149}
+  :root{
+    --carrot:#FF6F0F; --carrot-dark:#E55F00; --carrot-soft:#FFF3EA;
+    --bg:#FFFFFF; --surface:#F7F8F9; --card:#FFFFFF;
+    --tx:#212124; --sub:#4D5159; --mut:#868B94; --line:#EDEEEF;
+    --ok:#00A05B; --warn:#FF8A00; --danger:#F5484A;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif}
-  .wrap{max-width:820px;margin:0 auto;padding:24px 18px 64px}
-  a.back{color:var(--mut);text-decoration:none;font-size:13px}
-  a.back:hover{color:var(--acc)}
-  h1{font-size:21px;margin:10px 0 4px}
-  .meta{color:var(--mut);font-size:13.5px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px 12px}
-  .area-tag{font-size:12px;color:var(--acc);background:#1d2430;padding:1px 8px;border-radius:5px}
-  .badges{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 18px}
-  .badge{font-size:12px;padding:2px 9px;border-radius:20px;border:1px solid var(--warn);color:var(--warn)}
-  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
-  h2{font-size:15px;margin:0 0 12px;color:var(--acc)}
+  body{margin:0;background:var(--surface);color:var(--tx);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .topbar{background:var(--carrot);color:#fff}
+  .topbar .inner{max-width:840px;margin:0 auto;padding:14px 20px}
+  .topbar a{color:#fff;text-decoration:none;font-weight:700;font-size:15px}
+  .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
+  h1{font-size:23px;font-weight:800;letter-spacing:-.03em;margin:6px 0 8px;line-height:1.35}
+  .meta{color:var(--sub);font-size:13.5px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+  .area-tag{font-size:12px;font-weight:700;color:var(--carrot);background:var(--carrot-soft);padding:3px 10px;border-radius:999px}
+  .badges{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 18px}
+  .badge{font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:999px;background:var(--carrot-soft);color:var(--carrot-dark)}
+  section{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin:12px 0;
+    box-shadow:0 1px 3px rgba(0,0,0,.03)}
+  h2{font-size:16px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px}
   table{width:100%;border-collapse:collapse;font-size:13.5px}
-  th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line)}
   th:first-child,td:first-child{text-align:left}
-  th{color:var(--mut);font-weight:600}
-  .sched{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px}
-  .sched .k{color:var(--mut)}
-  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px}
-  .kv .k{color:var(--mut)}
-  .spec{font-size:12px;color:var(--ok)}
-  .note{color:var(--mut);font-size:13px}
-  a.src{display:inline-block;margin-top:6px;color:var(--acc);text-decoration:none;font-weight:600}
-  a.src:hover{text-decoration:underline}
+  th{color:var(--mut);font-weight:700;font-size:12.5px}
+  tbody tr:last-child td{border-bottom:none}
+  .sched,.kv{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;font-size:13.5px}
+  .sched .k,.kv .k{color:var(--mut);font-weight:600}
+  .spec{font-size:12px;font-weight:700;color:var(--ok)}
+  .note{color:var(--mut);font-size:13px;margin:0 0 10px}
+  a.src{display:inline-flex;align-items:center;gap:6px;background:var(--carrot);color:#fff;text-decoration:none;
+    font-weight:700;font-size:14px;padding:11px 18px;border-radius:12px}
+  a.src:hover{background:var(--carrot-dark)}
   .muted{color:var(--mut)}
+  pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--sub);margin:0}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <a class="back" href="/">← 목록으로</a>
-  <h1>{{ notice.house_nm }}</h1>
-  <div class="meta">
-    <span class="area-tag">{{ notice.area_nm or '-' }}</span>
-    <span>{{ notice.house_secd_nm or '' }} {{ notice.house_dtl_secd_nm or '' }}</span>
-    <span>총 {{ notice.tot_suply_hshldco or '-' }}세대</span>
-    {% if mvn %}<span>입주예정 {{ mvn[:4] }}.{{ mvn[4:6] }}</span>{% endif %}
-  </div>
-
-  {% if regs %}
-  <div class="badges">
-    {% for r in regs %}<span class="badge">{{ r }}</span>{% endfor %}
-  </div>
-  {% endif %}
-
-  {% if schedule %}
-  <section>
-    <h2>📅 일정</h2>
-    <div class="sched">
-      {% for label, val in schedule %}
-        <div class="k">{{ label }}</div><div>{{ val }}</div>
-      {% endfor %}
+  <div class="topbar"><div class="inner"><a href="/">← 목록으로</a></div></div>
+  <div class="wrap">
+    <h1>{{ notice.house_nm }}</h1>
+    <div class="meta">
+      <span class="area-tag">{{ notice.area_nm or '-' }}</span>
+      <span>{{ notice.house_secd_nm or '' }} {{ notice.house_dtl_secd_nm or '' }}</span>
+      <span>총 {{ notice.tot_suply_hshldco or '-' }}세대</span>
+      {% if mvn %}<span>입주예정 {{ mvn[:4] }}.{{ mvn[4:6] }}</span>{% endif %}
     </div>
-  </section>
-  {% endif %}
 
-  {% if lh_schedule %}
-  <section>
-    <h2>📅 공급구분별 일정</h2>
-    <table>
-      <thead><tr><th>구분</th><th>신청일시</th><th>당첨발표</th><th>서류제출</th><th>계약</th></tr></thead>
-      <tbody>
-        {% for r in lh_schedule %}
-        <tr>
-          <td>{{ r.gubun or '-' }}</td>
-          <td>{{ r.acp or '-' }}</td>
-          <td>{{ r.anc or '-' }}</td>
-          <td>{{ r.sbm or '-' }}</td>
-          <td>{{ r.ctrt or '-' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
-  {% endif %}
-
-  {% if rows %}
-  <section>
-    <h2>🏘 주택형별 모집</h2>
-    <table>
-      <thead>
-        <tr><th>주택형</th><th>면적(㎡)</th><th>분양가(만원)</th><th>일반</th><th>특별공급</th></tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        {% set ht = row.ht %}
-        <tr>
-          <td>{{ ht.house_ty }}</td>
-          <td>{{ '%.2f'|format(ht.suply_ar) if ht.suply_ar else '-' }}</td>
-          <td>{{ '{:,}'.format(ht.lttot_top_amount) if ht.lttot_top_amount else '공고문' }}</td>
-          <td>{{ ht.suply_hshldco if ht.suply_hshldco is not none else '-' }}</td>
-          <td>
-            {% if row.specials %}
-              {% for label, cnt in row.specials %}<span class="spec">{{ label }} {{ cnt }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
-            {% else %}<span class="muted">-</span>{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
-  {% endif %}
-
-  <section>
-    <h2>📍 위치 · 문의</h2>
-    <div class="kv">
-      {% if adres %}<div class="k">주소</div><div>{{ adres }}</div>{% endif %}
-      {% if builder %}<div class="k">시공사</div><div>{{ builder }}</div>{% endif %}
-      {% if notice.bsns_mby_nm %}<div class="k">시행</div><div>{{ notice.bsns_mby_nm }}</div>{% endif %}
-      {% if tel %}<div class="k">문의</div><div>{{ tel }}</div>{% endif %}
-    </div>
-  </section>
-
-  {% if pan_dtl %}
-  <section>
-    <h2>📄 공고 내용</h2>
-    <pre style="white-space:pre-wrap;font:13px/1.7 inherit;color:var(--tx);margin:0">{{ pan_dtl }}</pre>
-  </section>
-  {% endif %}
-
-  <section>
-    <h2>📋 자격요건 · 상세</h2>
-    <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요.</p>
-    {% if notice.pblanc_url %}
-      <a class="src" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener">📄 원본 공고문(홈페이지) 열기 →</a>
+    {% if regs %}
+    <div class="badges">{% for r in regs %}<span class="badge">{{ r }}</span>{% endfor %}</div>
     {% endif %}
-  </section>
-</div>
+
+    {% if schedule %}
+    <section>
+      <h2>📅 일정</h2>
+      <div class="sched">
+        {% for label, val in schedule %}<div class="k">{{ label }}</div><div>{{ val }}</div>{% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if lh_schedule %}
+    <section>
+      <h2>📅 공급구분별 일정</h2>
+      <table>
+        <thead><tr><th>구분</th><th>신청일시</th><th>당첨발표</th><th>서류제출</th><th>계약</th></tr></thead>
+        <tbody>
+          {% for r in lh_schedule %}
+          <tr><td>{{ r.gubun or '-' }}</td><td>{{ r.acp or '-' }}</td><td>{{ r.anc or '-' }}</td><td>{{ r.sbm or '-' }}</td><td>{{ r.ctrt or '-' }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    {% if rows %}
+    <section>
+      <h2>🏘 주택형별 모집</h2>
+      <table>
+        <thead><tr><th>주택형</th><th>면적(㎡)</th><th>분양가(만원)</th><th>일반</th><th>특별공급</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+          {% set ht = row.ht %}
+          <tr>
+            <td>{{ ht.house_ty }}</td>
+            <td>{{ '%.2f'|format(ht.suply_ar) if ht.suply_ar else '-' }}</td>
+            <td>{{ '{:,}'.format(ht.lttot_top_amount) if ht.lttot_top_amount else '공고문' }}</td>
+            <td>{{ ht.suply_hshldco if ht.suply_hshldco is not none else '-' }}</td>
+            <td>{% if row.specials %}{% for label, cnt in row.specials %}<span class="spec">{{ label }} {{ cnt }}</span>{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="muted">-</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <section>
+      <h2>📍 위치 · 문의</h2>
+      <div class="kv">
+        {% if adres %}<div class="k">주소</div><div>{{ adres }}</div>{% endif %}
+        {% if builder %}<div class="k">시공사</div><div>{{ builder }}</div>{% endif %}
+        {% if notice.bsns_mby_nm %}<div class="k">시행</div><div>{{ notice.bsns_mby_nm }}</div>{% endif %}
+        {% if tel %}<div class="k">문의</div><div>{{ tel }}</div>{% endif %}
+      </div>
+    </section>
+
+    {% if pan_dtl %}
+    <section>
+      <h2>📄 공고 내용</h2>
+      <pre class="cts">{{ pan_dtl }}</pre>
+    </section>
+    {% endif %}
+
+    <section>
+      <h2>📋 자격요건 · 상세</h2>
+      <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요.</p>
+      {% if notice.pblanc_url %}<a class="src" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener">📄 원본 공고문(홈페이지) 열기</a>{% endif %}
+    </section>
+  </div>
 </body>
 </html>
