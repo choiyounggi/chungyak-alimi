@@ -173,10 +173,16 @@ def backfill_notified() -> int:
         return len(pending)
 
 
-def main() -> None:
+def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+    # httpx는 요청 URL 전체(쿼리스트링의 API 키 포함)를 INFO로 남기므로 저널 노출 차단
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def main() -> None:
+    configure_logging()
     if "--backfill" in sys.argv:
         result = run_batch(notify=False)
         result["backfilled"] = backfill_notified()
