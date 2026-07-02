@@ -49,6 +49,21 @@ def _cleanup():
         s.commit()
 
 
+# ── 로깅 설정: httpx 요청 URL(API 키 포함) INFO 로그 차단 ──
+def test_configure_logging_silences_httpx():
+    import logging
+
+    httpx_logger = logging.getLogger("httpx")
+    prev_level = httpx_logger.level
+    try:
+        pipeline.configure_logging()
+        assert httpx_logger.level == logging.WARNING
+        assert not httpx_logger.isEnabledFor(logging.INFO)  # 키 담긴 요청 URL 미출력
+        assert httpx_logger.isEnabledFor(logging.WARNING)  # 에러·경고는 계속 보임
+    finally:
+        httpx_logger.setLevel(prev_level)
+
+
 # ── 폴리곤 보강: 저장 + 재실행 skip + 없으면 빈배열 ──
 def test_enrich_polygons_store_and_skip(monkeypatch):
     _seed_matched("P_POLY")
