@@ -70,6 +70,39 @@ def test_index_renders(seeded):
     assert SAMPLE["HOUSE_NM"] in r.text
 
 
+# ── 대시보드: 카드 필터링용 특공 라벨 (주택형 raw 세대수 기반) ──
+def test_dashboard_specials_from_house_type(seeded):
+    ht = ApplyhomeHouseType.model_validate(
+        {**SAMPLE_HT, "PBLANC_NO": "W1", "NWBB_HSHLDCO": "12", "LFE_FRST_HSHLDCO": "0"}
+    )
+    upsert_house_types([ht], session=seeded)
+    items = matched_dashboard(seeded)
+    assert items[0]["specials"] == ["신혼부부"]  # 0세대(생애최초)는 제외
+
+
+# ── 대시보드: 이름 기반 특공 라벨 (신혼희망타운 등 세대수 필드 없는 소스) ──
+def test_dashboard_specials_from_name(seeded):
+    n = ApplyhomeNotice.model_validate(
+        {**SAMPLE, "PBLANC_NO": "W2", "HOUSE_MANAGE_NO": "W2", "HOUSE_NM": "행복 신혼희망타운"}
+    )
+    upsert_notices([n], session=seeded)
+    save_match_results([("W2", True, [])], session=seeded)
+    items = matched_dashboard(seeded)
+    by_no = {it["notice"].pblanc_no: it for it in items}
+    assert by_no["W2"]["specials"] == ["신혼부부"]
+    assert by_no["W1"]["specials"] == []  # 특공 정보 없음 → 빈 목록 (경계값)
+
+
+# ── 인덱스 렌더: 필터 칩(지역/특공) + 카드 data 속성 ──
+def test_index_filter_chips(seeded):
+    client = TestClient(app)
+    r = client.get("/")
+    assert 'data-ftype="area"' in r.text  # filters.yaml regions → 클릭 칩
+    assert 'data-ftype="special"' in r.text
+    assert 'data-area="경기"' in r.text  # 카드 매칭 속성
+    assert "js-empty" in r.text
+
+
 # ── 상세 페이지: 렌더 + 주택형/특공 표시 ──
 def test_detail_renders(seeded):
     client = TestClient(app)
