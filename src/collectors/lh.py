@@ -210,6 +210,20 @@ def fetch_lh_detail(
                     "ctrt": _range_str(r.get("CTRT_ST_DT"), r.get("CTRT_ED_DT")),
                 }
             )
+        # 단지 이미지(조감도·위치도·배치도, dsSbdAhfl)와 공고문 PDF(dsAhflInfo).
+        # 라벨 행(AHFL_URL="다운로드" 등)은 http URL + 확장자 필터로 제외한다.
+        images = [
+            {"label": a.get("SL_PAN_AHFL_DS_CD_NM"), "name": a.get("CMN_AHFL_NM"), "url": a.get("AHFL_URL")}
+            for a in _extract_ds_list(body, "dsSbdAhfl")
+            if (a.get("AHFL_URL") or "").startswith("http")
+            and (a.get("CMN_AHFL_NM") or "").lower().endswith((".jpg", ".jpeg", ".png", ".gif"))
+        ]
+        files = [
+            {"label": a.get("SL_PAN_AHFL_DS_CD_NM"), "name": a.get("CMN_AHFL_NM"), "url": a.get("AHFL_URL")}
+            for a in _extract_ds_list(body, "dsAhflInfo")
+            if (a.get("AHFL_URL") or "").startswith("http")
+            and (a.get("CMN_AHFL_NM") or "").lower().endswith(".pdf")
+        ]
         return {
             "adres": adres or None,
             "mvin": sbd.get("MVIN_XPC_YM"),
@@ -217,6 +231,8 @@ def fetch_lh_detail(
             "ddo_ar": sbd.get("MIN_MAX_RSDN_DDO_AR"),
             "schedule": schedule,
             "pan_dtl_cts": (etc.get("PAN_DTL_CTS") or "").strip()[:2000],
+            "images": images,
+            "files": files,
         }
     finally:
         if own_client:

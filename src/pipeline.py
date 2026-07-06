@@ -113,7 +113,8 @@ def enrich_lh_detail() -> int:
         )
         for n in session.scalars(q).all():
             r = n.raw or {}
-            if r.get("_lh_detail"):  # 이미 보강됨
+            d0 = r.get("_lh_detail")
+            if d0 and "images" in d0:  # 이미 보강됨(구버전엔 images 키가 없어 1회 재보강)
                 continue
             try:
                 d = fetch_lh_detail(

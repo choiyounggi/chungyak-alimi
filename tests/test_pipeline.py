@@ -129,7 +129,10 @@ def test_enrich_lh_detail(monkeypatch):
 
     def fake(**kw):
         calls.append(kw["pan_id"])
-        return {"adres": "경기도 고양시 도내동", "schedule": [], "pan_dtl_cts": "공고내용", "mvin": None}
+        return {
+            "adres": "경기도 고양시 도내동", "schedule": [], "pan_dtl_cts": "공고내용",
+            "mvin": None, "images": [], "files": [],
+        }
 
     monkeypatch.setattr(pipeline, "fetch_lh_detail", fake)
     assert pipeline.enrich_lh_detail() == 1
@@ -139,6 +142,20 @@ def test_enrich_lh_detail(monkeypatch):
         assert n2.hsslpy_adres == "경기도 고양시 도내동"  # 주소 컬럼도 갱신
 
     calls.clear()
-    pipeline.enrich_lh_detail()  # 재실행 → 이미 _lh_detail 있어 skip
+    pipeline.enrich_lh_detail()  # 재실행 → 이미 _lh_detail(images 포함) 있어 skip
     assert calls == []
+
+    # 구버전 _lh_detail(images 키 없음)은 1회 재보강된다 (이미지 갤러리 마이그레이션)
+    with SessionLocal() as s:
+        n3 = s.scalar(select(Notice).where(Notice.pblanc_no == "LHD1"))
+        legacy = {k: v for k, v in n3.raw["_lh_detail"].items() if k not in ("images", "files")}
+        s.execute(
+            pipeline.update(Notice)
+            .where(Notice.pblanc_no == "LHD1")
+            .values(raw={**n3.raw, "_lh_detail": legacy})
+        )
+        s.commit()
+    calls.clear()
+    assert pipeline.enrich_lh_detail() == 1
+    assert calls == ["LHD1"]
     _cleanup()

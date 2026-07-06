@@ -228,6 +228,8 @@ def notice_detail_data(session, n) -> dict:
         "lh_schedule": lh.get("schedule") or [],
         "pan_dtl": lh.get("pan_dtl_cts"),
         "regs": regs,
+        "lh_images": lh.get("images") or [],
+        "lh_files": lh.get("files") or [],
         "adres": raw.get("HSSPLY_ADRES") or n.hsslpy_adres,
         "tel": raw.get("MDHS_TELNO"),
         "builder": raw.get("CNSTRCT_ENTRPS_NM"),

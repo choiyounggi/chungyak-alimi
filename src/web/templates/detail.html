@@ -41,6 +41,13 @@
   a.src:hover{background:var(--carrot-dark)}
   .muted{color:var(--mut)}
   pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--sub);margin:0}
+  .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+  .imgs a{display:block;text-decoration:none;color:var(--sub);font-size:12.5px;font-weight:600;text-align:center}
+  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#EDEEEF;margin-bottom:5px}
+  .imgs a:hover img{border-color:var(--carrot)}
+  .srcs{display:flex;flex-wrap:wrap;gap:8px}
+  a.src.alt{background:#fff;color:var(--carrot);border:1.5px solid var(--carrot)}
+  a.src.alt:hover{background:var(--carrot-soft)}
 </style>
 </head>
 <body>
@@ -133,6 +140,21 @@
     </section>
     {% endif %}
 
+    {% if lh_images %}
+    <section>
+      <h2>🖼 단지 이미지</h2>
+      <div class="imgs">
+        {% for im in lh_images %}
+        <a href="{{ im.url }}" target="_blank" rel="noopener">
+          <img src="{{ im.url }}" alt="{{ im.label or im.name }}" loading="lazy"
+               onerror="this.closest('a').style.display='none'">
+          <span>{{ im.label or im.name }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
     <section>
       <h2>📍 위치 · 문의</h2>
       {% if adres and kakao_key %}
@@ -155,8 +177,13 @@
 
     <section>
       <h2>📋 자격요건 · 상세</h2>
-      <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요.</p>
-      {% if notice.pblanc_url %}<a class="src" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener">📄 원본 공고문(홈페이지) 열기</a>{% endif %}
+      <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요. 평면도(도면)는 공고문 PDF에 포함되어 있어요.</p>
+      <div class="srcs">
+        {% if notice.pblanc_url %}<a class="src" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener">📄 원본 공고문(홈페이지) 열기</a>{% endif %}
+        {% for f in lh_files %}
+        <a class="src alt" href="{{ f.url }}" target="_blank" rel="noopener">📎 {{ f.label or f.name or '공고문(PDF)' }}</a>
+        {% endfor %}
+      </div>
     </section>
   </div>
 
