@@ -21,6 +21,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 from .config import settings
 from .filters import FilterConfig, find_superseded, match_notice
 from .models import ApplyhomeHouseType, ApplyhomeNotice
+from .scoring import judge_notice, load_profile
 
 # 정정공고로 대체된 공고의 탈락 사유 접두사(뒤에 :최신공고번호)
 SUPERSEDED_REASON = "정정공고로 대체"
@@ -115,6 +116,8 @@ class MatchResult(Base):
     pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
     matched: Mapped[bool] = mapped_column(Boolean)
     fail_reasons: Mapped[list] = mapped_column(JSONB, default=list)
+    # 내 순위 판정("1순위"/"2순위", 공공·프로필없음 등 판정불가는 NULL) — 평가 시 저장
+    my_rank: Mapped[str | None] = mapped_column(String)
     evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -132,6 +135,9 @@ SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    # 경량 마이그레이션: create_all은 기존 테이블에 컬럼을 추가하지 않는다
+    with engine.begin() as conn:
+        conn.exec_driver_sql("ALTER TABLE match_result ADD COLUMN IF NOT EXISTS my_rank VARCHAR")
 
 
 @dataclass
@@ -235,11 +241,13 @@ def upsert_house_types(
 
 
 def save_match_results(
-    results: list[tuple[str, bool, list[str]]],
+    results: list[tuple],
     *,
     session: Session | None = None,
 ) -> int:
-    """(pblanc_no, matched, fail_reasons) 목록을 match_result 에 upsert."""
+    """(pblanc_no, matched, fail_reasons[, my_rank]) 목록을 match_result 에 upsert.
+
+    my_rank는 선택(생략 시 NULL) — 기존 3-튜플 호출과 호환."""
     if not results:
         return 0
     own = session is None
@@ -247,8 +255,9 @@ def save_match_results(
     try:
         deduped = {r[0]: r for r in results}
         rows = [
-            {"pblanc_no": p, "matched": m, "fail_reasons": fr}
-            for (p, m, fr) in deduped.values()
+            {"pblanc_no": r[0], "matched": r[1], "fail_reasons": r[2],
+             "my_rank": r[3] if len(r) > 3 else None}
+            for r in deduped.values()
         ]
         stmt = pg_insert(MatchResult).values(rows)
         stmt = stmt.on_conflict_do_update(
@@ -256,6 +265,7 @@ def save_match_results(
             set_={
                 "matched": stmt.excluded.matched,
                 "fail_reasons": stmt.excluded.fail_reasons,
+                "my_rank": stmt.excluded.my_rank,
                 "evaluated_at": func.now(),
             },
         )
@@ -276,7 +286,8 @@ def evaluate_all(
     try:
         notices = session.scalars(select(Notice)).all()
         superseded = find_superseded(notices)
-        results: list[tuple[str, bool, list[str]]] = []
+        profile = load_profile()  # 없으면 None → my_rank 전부 NULL
+        results: list[tuple] = []
         for n in notices:
             # 정정공고로 대체된 공고는 노출 대상에서 제외(최신 정정만 남긴다)
             if n.pblanc_no in superseded:
@@ -288,9 +299,14 @@ def evaluate_all(
                 select(NoticeHouseType).where(NoticeHouseType.pblanc_no == n.pblanc_no)
             ).all()
             matched, fails = match_notice(n, hts, cfg, today=today)
-            results.append((n.pblanc_no, matched, fails))
+            my_rank = None
+            if matched and profile is not None:
+                judged = judge_notice(n, hts, profile, today=today)
+                if judged["supported"]:
+                    my_rank = judged["rank"]["rank"]
+            results.append((n.pblanc_no, matched, fails, my_rank))
         save_match_results(results, session=session)
-        return (len(results), sum(1 for _, m, _ in results if m))
+        return (len(results), sum(1 for r in results if r[1]))
     finally:
         if own:
             session.close()

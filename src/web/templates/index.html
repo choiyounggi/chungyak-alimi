@@ -39,6 +39,9 @@
   .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--sub)}
   .row b{color:var(--tx);font-weight:700}
   .area-tag{font-size:12px;font-weight:700;color:var(--carrot);background:var(--carrot-soft);padding:3px 10px;border-radius:999px}
+  .rank-tag{font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px}
+  .rank-1{color:#00754A;background:#E6F6EE}
+  .rank-2{color:#8A6D00;background:#FFF6DC}
   .badge{flex:none;display:inline-block;font-size:12.5px;font-weight:800;padding:4px 11px;border-radius:999px;white-space:nowrap}
   .dday-soon{color:#fff;background:var(--danger)}
   .dday-mid{color:#fff;background:var(--warn)}
@@ -68,6 +71,8 @@
       {% for sp in cfg.special_supply %}
       <button class="chip" data-ftype="special" data-fval="{{ sp }}">🎁 {{ sp }}</button>
       {% endfor %}
+      <button class="chip" data-ftype="rank" data-fval="1순위">🏅 1순위</button>
+      <button class="chip" data-ftype="rank" data-fval="2순위">🏅 2순위</button>
       <span class="chip">💰 {{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
       <span class="chip">⏰ {{ '진행·예정만' if cfg.only_open else '전체' }}</span>
     </div>
@@ -81,7 +86,7 @@
 
     {% for it in items %}
     {% set n = it.notice %}
-    <div class="card" data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}" data-specials="{{ it.specials|join('|') }}">
+    <div class="card" data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}" data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}">
       <div class="head-row">
         <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
         {% if it.dday is not none %}
@@ -93,6 +98,7 @@
       </div>
       <div class="row">
         <span class="area-tag">{{ n.area_nm or '-' }}</span>
+        {% if it.my_rank %}<span class="rank-tag {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">🏅 {{ it.my_rank }}</span>{% endif %}
         <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
       </div>
       {% if it.adres %}<div class="row"><span class="addr">📍 {{ it.adres }}</span></div>{% endif %}
@@ -122,6 +128,7 @@
     function matches(card) {
       if (!active) return true;
       if (active.type === "area") return card.dataset.area === active.val;
+      if (active.type === "rank") return card.dataset.rank === active.val;
       if (active.type === "secd") return card.dataset.secd === active.val;
       if (active.type === "special") {
         // 라벨 표기가 축약될 수 있어(예: 노부모↔노부모부양) 접두 일치 허용
