@@ -1,0 +1,31 @@
+# 개인 프로필 — 청약 가점/순위/특공 자격 판정용
+# 실제 값은 config/profile.yaml 에 작성 (git 커밋 금지 — .gitignore 등록됨).
+# 파일이 없으면 판정 기능이 꺼진 채 기존처럼 동작한다.
+
+birth_date: 1990-01-01 # 생년월일 (무주택기간 기산: 만30세부터)
+marriage_date: 2022-05-01 # 혼인신고일 (미혼이면 null)
+engaged: false # 예비신혼부부(미혼이지만 입주 전 혼인신고 예정) — 신혼 특공 신청 가능
+is_household_head: true # 세대주 여부
+household_all_homeless: true # 세대구성원 전원 무주택
+homeless_since: null # 마지막 주택 처분일 (계속 무주택이면 null)
+dependents: 2 # 부양가족 수(본인 제외: 배우자+미혼자녀+3년이상 부양 직계존속)
+region: 서울 # 거주 시/도 (예치금 기준·해당지역 판정)
+won_within_5y: false # 5년 내 세대구성원 당첨 이력
+children_minor: 1 # 미성년 자녀 수
+
+account: # 청약통장
+  opened: 2016-01-01 # 가입일
+  balance_manwon: 1500 # 현재 예치금(만원)
+
+income:
+  monthly_manwon: 700 # 세전 가구 월평균소득(만원)
+  base_manwon: 719 # 전년도 도시근로자 '가구원수별' 월평균소득 100% 기준액(만원)
+  #   → 최근 모집공고문 소득기준표에서 우리 가구원수 행의 100% 금액을 옮겨 적는다(연 1회 갱신)
+  dual_income: true # 맞벌이 여부
+
+real_estate_manwon: 0 # 세대 부동산가액(만원) — 소득초과 시 추첨제 자산기준(3억3,100만원)
+
+first_life: # 생애최초 특공 요건
+  ever_owned_house: false # 세대구성원 전원, 과거 포함 주택 소유 이력 없음
+  income_tax_5y: true # 소득세 납부 5년 이상
+  currently_earning: true # 현재 근로/사업소득 있음

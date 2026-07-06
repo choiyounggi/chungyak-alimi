@@ -58,6 +58,30 @@
     <div class="badges">{% for r in regs %}<span class="badge">{{ r }}</span>{% endfor %}</div>
     {% endif %}
 
+    {% if judged %}
+    <section>
+      <h2>🎯 내 청약 판정</h2>
+      {% if judged.supported %}
+      <div class="sched">
+        <div class="k">가점</div>
+        <div><b>{{ judged.score.total }}점</b> <span class="muted">(무주택 {{ judged.score.homeless }} · 부양가족 {{ judged.score.dependents }} · 통장 {{ judged.score.account }})</span></div>
+        <div class="k">순위</div>
+        <div><b>{{ judged.rank.rank }}</b>{% if judged.rank.regulated %} <span class="muted">· 규제지역</span>{% endif %}
+          {% if judged.rank.reasons %}<span class="muted"> — {{ judged.rank.reasons|join(', ') }}</span>{% endif %}</div>
+        <div class="k">신혼부부 특공</div>
+        <div>{% if judged.newlywed.tier %}<b>{{ judged.newlywed.tier }}</b>{% else %}해당 없음{% endif %}
+          <span class="muted">— {{ judged.newlywed.reasons|join(', ') }}</span></div>
+        <div class="k">생애최초 특공</div>
+        <div>{% if judged.first_life.tier %}<b>{{ judged.first_life.tier }}</b>{% else %}해당 없음{% endif %}
+          <span class="muted">— {{ judged.first_life.reasons|join(', ') }}</span></div>
+      </div>
+      <p class="muted" style="margin:10px 0 0;font-size:12px">※ config/profile.yaml 기반 자동 판정 — 최종 자격은 모집공고문 기준으로 확인하세요.</p>
+      {% else %}
+      <p class="muted">{{ judged.reason }}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
     {% if schedule %}
     <section>
       <h2>📅 일정</h2>

@@ -91,6 +91,16 @@ def test_format_service_link_disabled(monkeypatch):
     assert "/notice/" not in txt
 
 
+# ── 포맷: 프로필 있으면 판정 요약(🎯) 포함, 없으면 미포함 ──
+def test_format_judgment_line():
+    from src.scoring import load_profile
+
+    profile = load_profile("config/profile.example.yaml")
+    n = _notice(HOUSE_DTL_SECD_NM="민영")
+    assert "🎯" in format_notice(n, [], profile=profile)
+    assert "🎯" not in format_notice(n, [])  # 프로필 없음 → 기존 포맷 유지
+
+
 # ── 발송: 성공 페이로드 검증 ──
 def test_send_telegram_payload():
     captured = {}
