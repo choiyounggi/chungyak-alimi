@@ -12,7 +12,7 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
-from ..db import SUPERSEDED_REASON, MatchResult, Notice, SessionLocal, house_types_of
+from ..db import SUPERSEDED_REASON, MatchResult, Notice, SessionLocal, house_types_of, init_db
 from ..filters import load_filter_config
 from ..scoring import judge_notice, load_profile
 
@@ -29,6 +29,9 @@ app.add_middleware(
     max_age=60 * 60 * 24 * 14,
 )
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+# 배치보다 웹이 먼저 재기동되는 배포에서도 스키마(my_rank 등)가 준비되도록 보장
+init_db()
 
 # 특별공급 세대수 필드(raw) → 라벨
 SPECIAL_SUPPLY_LABELS = {
@@ -119,13 +122,13 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
     """매칭된(관심) 공고를 마감임박순으로, 분양가·면적·D-day 계산해 반환."""
     today = today or date.today()
     q = (
-        select(Notice)
+        select(Notice, MatchResult.my_rank)
         .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
         .where(MatchResult.matched.is_(True))
         .order_by(Notice.rcept_endde)
     )
     items: list[dict] = []
-    for n in session.scalars(q).all():
+    for n, my_rank in session.execute(q).all():
         hts = house_types_of(n.pblanc_no, session=session)
         prices = [h.lttot_top_amount for h in hts if h.lttot_top_amount]
         areas = [float(h.suply_ar) for h in hts if h.suply_ar is not None]
@@ -143,6 +146,7 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
         items.append(
             {
                 "notice": n,
+                "my_rank": my_rank,
                 "specials": sorted(specials),
                 "adres": n.hsslpy_adres or (n.raw or {}).get("HSSPLY_ADRES"),
                 "price_lo": min(prices) if prices else None,
@@ -153,6 +157,9 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
                 "dday": (deadline - today).days if deadline else None,
             }
         )
+    # 순위별 정렬: 1순위 → 2순위 → 판정불가(공공 등), 같은 그룹 안에선 마감임박순
+    rank_order = {"1순위": 0, "2순위": 1}
+    items.sort(key=lambda it: (rank_order.get(it["my_rank"], 2), it["deadline"] or date.max))
     return items
 
 
