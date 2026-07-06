@@ -133,3 +133,43 @@ def test_load_config():
     assert cfg.only_open is True  # 기본 켜짐
     with pytest.raises(Exception):
         FilterConfig(price_max_manwon="여덟억")  # 타입 오류
+
+
+# ── 제외 키워드: 공고명에 포함되면 탈락 ──
+# (배경 2026-07-06: exclude_keywords가 비어 있어 "고령자복지주택(영구임대)" 공고가
+#  매칭·알림됨 — 연령제한/수급자 대상 공고 오매칭 회귀 방지)
+def test_exclude_keyword_elderly_fail():
+    cfg = FilterConfig(exclude_keywords=["고령자", "실버", "영구임대"])
+    n = _notice(
+        HOUSE_NM="성남시 분당목련1 분당한솔7 고령자복지주택(영구임대) 예비입주자 모집공고",
+        SUBSCRPT_AREA_CODE_NM="경기",
+    )
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is False
+    assert "제외키워드" in fails
+
+
+def test_exclude_keyword_permanent_rental_fail():
+    cfg = FilterConfig(exclude_keywords=["고령자", "실버", "영구임대"])
+    n = _notice(
+        HOUSE_NM="성남시 분당목련1 분당한솔7 분당청솔6 영구임대 예비입주자 모집공고",
+        SUBSCRPT_AREA_CODE_NM="경기",
+    )
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is False
+    assert "제외키워드" in fails
+
+
+def test_exclude_keyword_absent_passes():
+    cfg = FilterConfig(exclude_keywords=["고령자", "실버", "영구임대"])
+    n = _notice(SUBSCRPT_AREA_CODE_NM="경기")  # 일반 공공분양 공고명
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert "제외키워드" not in fails
+    assert matched is True
+
+
+def test_exclude_keyword_empty_config_passes():
+    cfg = FilterConfig(exclude_keywords=[])
+    n = _notice(HOUSE_NM="고령자복지주택", SUBSCRPT_AREA_CODE_NM="경기")
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert "제외키워드" not in fails
