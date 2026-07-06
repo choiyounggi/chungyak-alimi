@@ -39,6 +39,64 @@ def _to_int(v) -> int:
         return 0
 
 
+CORRECTION_PREFIX = "[정정공고]"
+
+
+def _strip_corrections(name: str) -> tuple[str, int]:
+    """이름 앞의 [정정공고] 접두사를 (중첩 포함) 제거 → (원본 이름, 정정 횟수)."""
+    n = (name or "").strip()
+    count = 0
+    while n.startswith(CORRECTION_PREFIX):
+        n = n[len(CORRECTION_PREFIX) :].lstrip()
+        count += 1
+    return n, count
+
+
+def _norm(s: str) -> str:
+    return "".join((s or "").split())
+
+
+def find_superseded(notices) -> dict[str, str]:
+    """정정공고에 의해 대체된 공고를 찾는다 → {대체된 pblanc_no: 최신 pblanc_no}.
+
+    - 청약홈: 같은 주택관리번호(house_manage_no) 그룹에서 최신 공고만 남긴다.
+    - LH: 공고명에서 [정정공고] 접두사를 벗긴 이름이 같은 그룹. 동명이공고 오탐을
+      막기 위해 그룹 안에 정정공고가 1건 이상 있을 때만 대체 처리한다.
+    - 최신 판정: 공고일(없으면 게시일) → 정정 횟수(LH는 원본·정정의 공고일이 같은
+      경우가 있어 접두사 수로 보강) → 공고번호 순.
+    """
+    groups: dict[str, list] = {}
+    for n in notices:
+        source = getattr(n, "source", None) or "applyhome"
+        if source == "applyhome":
+            if not n.house_manage_no:
+                continue
+            key = f"applyhome:hmn:{n.house_manage_no}"
+        else:
+            base, _ = _strip_corrections(n.house_nm)
+            if not base:
+                continue
+            key = f"{source}:nm:{_norm(base)}"
+        groups.setdefault(key, []).append(n)
+
+    def _order(n) -> tuple:
+        _, cnt = _strip_corrections(n.house_nm)
+        d = n.rcrit_pblanc_de or n.rcept_bgnde or date.min
+        return (d, cnt, n.pblanc_no)
+
+    superseded: dict[str, str] = {}
+    for key, members in groups.items():
+        if len(members) < 2:
+            continue
+        if ":nm:" in key and not any(_strip_corrections(m.house_nm)[1] for m in members):
+            continue  # 이름만 같고 정정공고가 없는 그룹은 대체하지 않는다
+        members = sorted(members, key=_order)
+        latest = members[-1]
+        for old in members[:-1]:
+            superseded[old.pblanc_no] = latest.pblanc_no
+    return superseded
+
+
 def match_notice(
     notice, house_types, cfg: FilterConfig, today: date | None = None
 ) -> tuple[bool, list[str]]:

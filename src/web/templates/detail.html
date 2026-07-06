@@ -58,6 +58,13 @@
     <div class="badges">{% for r in regs %}<span class="badge">{{ r }}</span>{% endfor %}</div>
     {% endif %}
 
+    {% if superseded_by %}
+    <section style="border-color:var(--carrot)">
+      <b>⚠️ 정정공고로 대체된 공고입니다.</b>
+      <a href="/notice/{{ superseded_by }}">최신 정정공고 보기 →</a>
+    </section>
+    {% endif %}
+
     {% if judged %}
     <section>
       <h2>🎯 내 청약 판정</h2>
