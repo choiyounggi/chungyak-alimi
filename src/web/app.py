@@ -131,9 +131,19 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
         areas = [float(h.suply_ar) for h in hts if h.suply_ar is not None]
         deadlines = [d for d in (n.rcept_endde, n.spsply_rcept_endde) if d]
         deadline = max(deadlines) if deadlines else None
+        # 카드 필터링용 특공 라벨: 주택형 raw 세대수 + 이름 기반(신혼희망타운 등 LH엔 세대수 필드가 없음)
+        specials = {
+            label
+            for ht in hts
+            for key, label in SPECIAL_SUPPLY_LABELS.items()
+            if _int(ht.raw.get(key)) > 0
+        }
+        if "신혼" in ((n.house_secd_nm or "") + (n.house_nm or "")):
+            specials.add("신혼부부")
         items.append(
             {
                 "notice": n,
+                "specials": sorted(specials),
                 "adres": n.hsslpy_adres or (n.raw or {}).get("HSSPLY_ADRES"),
                 "price_lo": min(prices) if prices else None,
                 "price_hi": max(prices) if prices else None,

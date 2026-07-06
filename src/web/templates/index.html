@@ -25,8 +25,11 @@
   .sub{color:var(--mut);font-size:13.5px}
   .count{color:var(--carrot);font-weight:800}
   .filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 22px}
-  .chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;color:var(--sub);font-weight:600}
+  .chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;color:var(--sub);font-weight:600;font-family:inherit}
   .chip b{color:var(--carrot)}
+  button.chip{cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+  button.chip:hover{border-color:var(--carrot);color:var(--carrot)}
+  button.chip.active{background:var(--carrot);border-color:var(--carrot);color:#fff}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin:12px 0;
     box-shadow:0 1px 3px rgba(0,0,0,.03);transition:box-shadow .18s,transform .18s}
   .card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);transform:translateY(-2px)}
@@ -56,9 +59,15 @@
     </div>
 
     <div class="filters">
-      <span class="chip">📍 <b>{{ cfg.regions|join(', ') if cfg.regions else '전국' }}</b></span>
-      <span class="chip">🏘 {{ cfg.house_types|join(', ') if cfg.house_types else '전체 유형' }}</span>
-      <span class="chip">🎁 {{ cfg.special_supply|join(', ') if cfg.special_supply else '특공 무관' }}</span>
+      {% for r in cfg.regions %}
+      <button class="chip" data-ftype="area" data-fval="{{ r }}">📍 {{ r }}</button>
+      {% else %}<span class="chip">📍 <b>전국</b></span>{% endfor %}
+      {% for t in cfg.house_types %}
+      <button class="chip" data-ftype="secd" data-fval="{{ t }}">🏘 {{ t }}</button>
+      {% else %}<span class="chip">🏘 전체 유형</span>{% endfor %}
+      {% for sp in cfg.special_supply %}
+      <button class="chip" data-ftype="special" data-fval="{{ sp }}">🎁 {{ sp }}</button>
+      {% endfor %}
       <span class="chip">💰 {{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
       <span class="chip">⏰ {{ '진행·예정만' if cfg.only_open else '전체' }}</span>
     </div>
@@ -66,10 +75,13 @@
     {% if not items %}
       <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
     {% endif %}
+    <div class="empty" id="js-empty" style="display:none">
+      <span class="em">🔍</span>선택한 필터에 맞는 공고가 없어요.
+    </div>
 
     {% for it in items %}
     {% set n = it.notice %}
-    <div class="card">
+    <div class="card" data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}" data-specials="{{ it.specials|join('|') }}">
       <div class="head-row">
         <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
         {% if it.dday is not none %}
@@ -97,5 +109,54 @@
 
     <footer>chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
   </div>
+
+  <script>
+  // 칩 필터: 한 번에 하나만 활성(다른 칩 클릭 시 교체), 활성 칩 재클릭 시 해제.
+  (function () {
+    var chips = Array.prototype.slice.call(document.querySelectorAll("button.chip"));
+    var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+    var countEl = document.querySelector(".count");
+    var emptyEl = document.getElementById("js-empty");
+    var active = null; // {type, val, el}
+
+    function matches(card) {
+      if (!active) return true;
+      if (active.type === "area") return card.dataset.area === active.val;
+      if (active.type === "secd") return card.dataset.secd === active.val;
+      if (active.type === "special") {
+        // 라벨 표기가 축약될 수 있어(예: 노부모↔노부모부양) 접두 일치 허용
+        return (card.dataset.specials || "").split("|").some(function (s) {
+          return s && (s.indexOf(active.val) === 0 || active.val.indexOf(s) === 0);
+        });
+      }
+      return true;
+    }
+
+    function apply() {
+      var visible = 0;
+      cards.forEach(function (c) {
+        var show = matches(c);
+        c.style.display = show ? "" : "none";
+        if (show) visible++;
+      });
+      if (countEl) countEl.textContent = visible;
+      if (emptyEl) emptyEl.style.display = cards.length && !visible ? "" : "none";
+    }
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var isSame = active && active.el === chip;
+        chips.forEach(function (c) { c.classList.remove("active"); });
+        if (isSame) {
+          active = null;
+        } else {
+          active = { type: chip.dataset.ftype, val: chip.dataset.fval, el: chip };
+          chip.classList.add("active");
+        }
+        apply();
+      });
+    });
+  })();
+  </script>
 </body>
 </html>
