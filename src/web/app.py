@@ -12,7 +12,7 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
-from ..db import MatchResult, Notice, SessionLocal, house_types_of
+from ..db import SUPERSEDED_REASON, MatchResult, Notice, SessionLocal, house_types_of
 from ..filters import load_filter_config
 from ..scoring import judge_notice, load_profile
 
@@ -201,10 +201,18 @@ def notice_detail_data(session, n) -> dict:
     profile = load_profile()
     judged = judge_notice(n, hts, profile) if profile is not None else None
 
+    # 정정공고로 대체된 공고면 최신 공고번호를 배너로 안내
+    mr = session.scalar(select(MatchResult).where(MatchResult.pblanc_no == n.pblanc_no))
+    superseded_by = None
+    for reason in (mr.fail_reasons or []) if mr else []:
+        if reason.startswith(f"{SUPERSEDED_REASON}:"):
+            superseded_by = reason.split(":", 1)[1]
+
     lh = raw.get("_lh_detail") or {}
     return {
         "notice": n,
         "judged": judged,
+        "superseded_by": superseded_by,
         "rows": rows,
         "schedule": schedule,
         "lh_schedule": lh.get("schedule") or [],

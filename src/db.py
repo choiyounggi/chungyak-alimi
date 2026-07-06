@@ -19,8 +19,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from .config import settings
-from .filters import FilterConfig, match_notice
+from .filters import FilterConfig, find_superseded, match_notice
 from .models import ApplyhomeHouseType, ApplyhomeNotice
+
+# 정정공고로 대체된 공고의 탈락 사유 접두사(뒤에 :최신공고번호)
+SUPERSEDED_REASON = "정정공고로 대체"
 
 # ApplyhomeNotice → notice 테이블에 저장할 컬럼(공고 식별/일정/필터축)
 _COLS = (
@@ -272,8 +275,15 @@ def evaluate_all(
     session = session or SessionLocal()
     try:
         notices = session.scalars(select(Notice)).all()
+        superseded = find_superseded(notices)
         results: list[tuple[str, bool, list[str]]] = []
         for n in notices:
+            # 정정공고로 대체된 공고는 노출 대상에서 제외(최신 정정만 남긴다)
+            if n.pblanc_no in superseded:
+                results.append(
+                    (n.pblanc_no, False, [f"{SUPERSEDED_REASON}:{superseded[n.pblanc_no]}"])
+                )
+                continue
             hts = session.scalars(
                 select(NoticeHouseType).where(NoticeHouseType.pblanc_no == n.pblanc_no)
             ).all()
