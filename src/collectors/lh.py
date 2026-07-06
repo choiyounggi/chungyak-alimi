@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, timedelta
+from urllib.parse import urljoin
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -166,6 +168,23 @@ def _range_str(st, ed) -> str | None:
     return a or b or None
 
 
+_IMG_SRC_RE = re.compile(r'<img\s+src="([^"]+)"')
+
+
+def _resolve_image_url(viewer_url: str, client: httpx.Client) -> str:
+    """LH 이미지 뷰어(lhImageView2.do) HTML에서 실제 이미지 파일 URL을 추출.
+
+    실패하면 원본 URL 유지 — 목록의 새 탭 링크(뷰어 페이지)로는 여전히 동작한다."""
+    try:
+        resp = client.get(viewer_url)
+        m = _IMG_SRC_RE.search(resp.text)
+        if m:
+            return urljoin(viewer_url, m.group(1))
+    except Exception:
+        logger.warning("이미지 뷰어 해석 실패(%s) — 원본 URL 유지", viewer_url)
+    return viewer_url
+
+
 def fetch_lh_detail(
     *,
     pan_id: str,
@@ -212,12 +231,18 @@ def fetch_lh_detail(
             )
         # 단지 이미지(조감도·위치도·배치도, dsSbdAhfl)와 공고문 PDF(dsAhflInfo).
         # 라벨 행(AHFL_URL="다운로드" 등)은 http URL + 확장자 필터로 제외한다.
-        images = [
-            {"label": a.get("SL_PAN_AHFL_DS_CD_NM"), "name": a.get("CMN_AHFL_NM"), "url": a.get("AHFL_URL")}
-            for a in _extract_ds_list(body, "dsSbdAhfl")
-            if (a.get("AHFL_URL") or "").startswith("http")
-            and (a.get("CMN_AHFL_NM") or "").lower().endswith((".jpg", ".jpeg", ".png", ".gif"))
-        ]
+        images = []
+        for a in _extract_ds_list(body, "dsSbdAhfl"):
+            url = a.get("AHFL_URL") or ""
+            fname = (a.get("CMN_AHFL_NM") or "").lower()
+            if not url.startswith("http") or not fname.endswith((".jpg", ".jpeg", ".png", ".gif")):
+                continue
+            # lhImageView2.do는 이미지가 아니라 뷰어 HTML을 반환 → 실제 파일 URL로 해석
+            if "lhImageView" in url:
+                url = _resolve_image_url(url, client)
+            images.append(
+                {"label": a.get("SL_PAN_AHFL_DS_CD_NM"), "name": a.get("CMN_AHFL_NM"), "url": url}
+            )
         files = [
             {"label": a.get("SL_PAN_AHFL_DS_CD_NM"), "name": a.get("CMN_AHFL_NM"), "url": a.get("AHFL_URL")}
             for a in _extract_ds_list(body, "dsAhflInfo")
