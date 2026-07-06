@@ -207,6 +207,9 @@ def test_detail_map(seeded, monkeypatch):
     assert 'onerror="mapLoadFailed()"' in r.text
     assert "지도를 불러오지 못했어요" in r.text
     assert "새로고침" in r.text
+    # 지오코딩 사다리 폴백 + 전부 실패 시 안내(서울시청 방치 회귀 방지)
+    assert "tryGeocode" in r.text
+    assert "지도에서 위치를 찾지 못했어요" in r.text
 
 
 def test_detail_no_map_without_key(seeded, monkeypatch):

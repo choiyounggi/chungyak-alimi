@@ -279,8 +279,17 @@
       var geocoder = new kakao.maps.services.Geocoder();
       var full = {{ adres | tojson }};
       var polygonCoords = {{ polygon | tojson }};  // [[lng,lat], ...] 또는 null
-      // "외 N개 동 일원" 등 접미사로 실패할 수 있어 앞부분(시군구+동)으로 폴백
-      var fallback = full.split(' ').slice(0, 4).join(' ');
+      // 신규 택지 주소("~동 양주신도시 회천지구 A8블록")는 지오코딩이 실패하므로
+      // 전체 → 앞 4단어 → 3단어(시도+시군구+동) → 2단어 순으로 좁혀가며 시도한다.
+      var candidates = (function () {
+        var parts = full.replace(/\(.*?\)/g, ' ').split(/\s+/).filter(Boolean);
+        var list = [full];
+        for (var k = Math.min(4, parts.length); k >= 2; k--) {
+          var cand = parts.slice(0, k).join(' ');
+          if (list.indexOf(cand) === -1) list.push(cand);
+        }
+        return list;
+      })();
 
       // 필지 폴리곤(있으면) 그리기 + 그 영역으로 지도 맞춤
       if (polygonCoords && polygonCoords.length) {
@@ -294,17 +303,37 @@
         map.setBounds(bounds);
       }
 
-      function place(result) {
+      function place(result, approx) {
         var pos = new kakao.maps.LatLng(result[0].y, result[0].x);
         new kakao.maps.Marker({ map: map, position: pos });
-        if (!(polygonCoords && polygonCoords.length)) { map.setCenter(pos); map.setLevel(4); }
+        if (!(polygonCoords && polygonCoords.length)) {
+          map.setCenter(pos);
+          map.setLevel(approx ? 6 : 4);  // 동 단위 대략 위치면 넓게
+        }
+        if (approx) {
+          var note = document.createElement('div');
+          note.textContent = '※ 신규 택지라 정확한 지점을 찾지 못해 동 단위 대략 위치예요.';
+          note.style.cssText = 'color:var(--mut);font-size:12px;margin:-8px 0 14px';
+          document.getElementById('map').insertAdjacentElement('afterend', note);
+        }
       }
-      geocoder.addressSearch(full, function (r, s) {
-        if (s === kakao.maps.services.Status.OK) { place(r); return; }
-        geocoder.addressSearch(fallback, function (r2, s2) {
-          if (s2 === kakao.maps.services.Status.OK) { place(r2); }
+      function mapNoLocation() {
+        if (polygonCoords && polygonCoords.length) return;  // 폴리곤으로 이미 표시됨
+        var el = document.getElementById('map');
+        el.innerHTML =
+          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;color:var(--mut);font-size:13.5px">' +
+          '<span style="font-size:26px">📍</span>' +
+          '<b style="color:var(--sub)">지도에서 위치를 찾지 못했어요</b>' +
+          '<span>신규 택지 주소라 좌표 검색이 안 돼요 — 아래 주소를 참고해주세요.</span>' +
+          '</div>';
+      }
+      (function tryGeocode(i) {
+        if (i >= candidates.length) { mapNoLocation(); return; }
+        geocoder.addressSearch(candidates[i], function (r, s) {
+          if (s === kakao.maps.services.Status.OK) { place(r, i > 0); return; }
+          tryGeocode(i + 1);
         });
-      });
+      })(0);
       } catch (e) { document.getElementById('map').dataset.ready = ''; mapLoadFailed(); }
       });
     })();
