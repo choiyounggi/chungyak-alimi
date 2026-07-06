@@ -158,6 +158,17 @@ DTL_RESPONSE = [
         "CTRT_ST_DT": "20261116", "CTRT_ED_DT": "20261119",
     }]},
     {"dsEtcInfo": [{"PAN_DTL_CTS": "■ 공급위치 : 경기도 고양시 ..."}]},
+    {"dsSbdAhfl": [
+        {"SL_PAN_AHFL_DS_CD_NM": "단지조감도", "CMN_AHFL_NM": "단지조감도.jpg",
+         "AHFL_URL": "https://apply.lh.or.kr/lhapply/lhImageView2.do?fileid=1"},
+        {"SL_PAN_AHFL_DS_CD_NM": "파일구분명", "CMN_AHFL_NM": "첨부파일명", "AHFL_URL": "다운로드"},  # 라벨 행
+    ]},
+    {"dsAhflInfo": [
+        {"SL_PAN_AHFL_DS_CD_NM": "공고문(PDF)", "CMN_AHFL_NM": "모집공고문.pdf",
+         "AHFL_URL": "https://apply.lh.or.kr/lhapply/lhFile.do?fileid=2"},
+        {"SL_PAN_AHFL_DS_CD_NM": "기타 첨부파일", "CMN_AHFL_NM": "동의서.hwp",
+         "AHFL_URL": "https://apply.lh.or.kr/lhapply/lhFile.do?fileid=3"},  # 비PDF → 제외
+    ]},
     {"resHeader": [{"SS_CODE": "Y"}]},
 ]
 
@@ -173,6 +184,13 @@ def test_fetch_lh_detail():
     assert d["schedule"][0]["anc"] == "2026-08-19"
     assert d["schedule"][0]["sbm"] == "2026-08-26 ~ 2026-08-30"  # 서류제출 기간
     assert "공급위치" in d["pan_dtl_cts"]
+    # 이미지: 라벨 행(URL='다운로드')은 제외되고 실제 jpg만
+    assert d["images"] == [{
+        "label": "단지조감도", "name": "단지조감도.jpg",
+        "url": "https://apply.lh.or.kr/lhapply/lhImageView2.do?fileid=1",
+    }]
+    # 첨부: PDF만(비PDF hwp 제외)
+    assert [f["name"] for f in d["files"]] == ["모집공고문.pdf"]
 
 
 # ── 상세정보: SS_CODE 오류면 None ──

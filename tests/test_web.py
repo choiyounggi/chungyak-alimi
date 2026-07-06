@@ -81,6 +81,32 @@ def test_detail_renders(seeded):
     assert "자격요건" in r.text  # 공고문 안내 섹션
 
 
+# ── 상세: LH 단지 이미지 갤러리 + 공고문 PDF 링크 ──
+def test_detail_lh_images_and_files(seeded):
+    n = ApplyhomeNotice.model_validate(
+        {**SAMPLE, "PBLANC_NO": "LHW1", "HOUSE_MANAGE_NO": None, "raw": {
+            **SAMPLE,
+            "_lh_detail": {
+                "adres": "경기도 김포시", "schedule": [], "pan_dtl_cts": "",
+                "images": [{"label": "단지조감도", "name": "조감도.jpg",
+                            "url": "https://apply.lh.or.kr/lhapply/lhImageView2.do?fileid=1"}],
+                "files": [{"label": "공고문(PDF)", "name": "공고문.pdf",
+                           "url": "https://apply.lh.or.kr/lhapply/lhFile.do?fileid=2"}],
+            },
+        }}
+    )
+    upsert_notices([n], source="lh", session=seeded)
+    save_match_results([("LHW1", True, [])], session=seeded)
+    r = TestClient(app).get("/notice/LHW1")
+    assert "단지 이미지" in r.text
+    assert "lhImageView2.do?fileid=1" in r.text
+    assert "단지조감도" in r.text
+    assert "lhFile.do?fileid=2" in r.text  # 공고문 PDF 직링크
+    # 이미지 없는 공고(W1)엔 갤러리 섹션 미노출 (경계값)
+    r2 = TestClient(app).get("/notice/W1")
+    assert "단지 이미지" not in r2.text
+
+
 # ── 상세: 없는 공고 404 ──
 def test_detail_not_found():
     assert TestClient(app).get("/notice/NOPE").status_code == 404
