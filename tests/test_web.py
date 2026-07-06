@@ -135,9 +135,13 @@ def test_detail_lh_images_and_files(seeded):
     assert "lhImageView2.do?fileid=1" in r.text
     assert "단지조감도" in r.text
     assert "lhFile.do?fileid=2" in r.text  # 공고문 PDF 직링크
-    # 이미지 없는 공고(W1)엔 갤러리 섹션 미노출 (경계값)
+    # 라이트박스: 팝업 마크업 + 좌우 넘김 버튼
+    assert 'id="lightbox"' in r.text
+    assert "lb-prev" in r.text and "lb-next" in r.text
+    # 이미지 없는 공고(W1)엔 갤러리·라이트박스 미노출 (경계값)
     r2 = TestClient(app).get("/notice/W1")
     assert "단지 이미지" not in r2.text
+    assert 'id="lightbox"' not in r2.text
 
 
 # ── 상세: 없는 공고 404 ──
