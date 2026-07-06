@@ -6,9 +6,10 @@ import httpx
 
 from .config import settings
 from .db import SessionLocal, house_types_of, mark_notified, pending_notifications
+from .scoring import judge_notice, load_profile
 
 
-def format_notice(notice, house_types) -> str:
+def format_notice(notice, house_types, profile=None) -> str:
     """공고 1건을 텔레그램 메시지(HTML)로 포맷."""
     prices = [h.lttot_top_amount for h in house_types if h.lttot_top_amount]
     if prices:
@@ -29,6 +30,10 @@ def format_notice(notice, house_types) -> str:
     if settings.public_base_url:
         base = settings.public_base_url.rstrip("/")
         lines.append(f"🔎 {base}/notice/{quote(notice.pblanc_no, safe='')}")
+    if profile is not None:
+        judged = judge_notice(notice, house_types, profile)
+        if judged["supported"]:
+            lines.append(f"🎯 {judged['summary']}")
     return "\n".join(lines)
 
 
@@ -69,11 +74,12 @@ def send_telegram(
 def notify_new_matches(*, client: httpx.Client | None = None, channel: str = "telegram") -> int:
     """매칭됐지만 미발송인 공고를 텔레그램으로 보내고 이력 기록. 발송 건수 반환."""
     sent = 0
+    profile = load_profile()
     with SessionLocal() as session:
         pending = pending_notifications(channel=channel, session=session)
         for notice in pending:
             hts = house_types_of(notice.pblanc_no, session=session)
-            send_telegram(format_notice(notice, hts), client=client)
+            send_telegram(format_notice(notice, hts, profile=profile), client=client)
             mark_notified(notice.pblanc_no, channel=channel, session=session)
             sent += 1
     return sent

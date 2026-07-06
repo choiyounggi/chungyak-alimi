@@ -22,3 +22,5 @@ pgdata/
 .DS_Store
 .idea/
 .vscode/
+# 개인 프로필(소득·자산 등 민감정보)
+config/profile.yaml
