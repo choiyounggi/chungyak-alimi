@@ -173,3 +173,18 @@ def test_exclude_keyword_empty_config_passes():
     n = _notice(HOUSE_NM="고령자복지주택", SUBSCRPT_AREA_CODE_NM="경기")
     matched, fails = match_notice(n, [], cfg, today=TODAY)
     assert "제외키워드" not in fails
+
+
+# ── 제외 키워드: 국민임대(소득 70% 이하 대상) 탈락, 공공임대·행복주택은 유지 ──
+def test_exclude_keyword_gungmin_rental():
+    cfg = FilterConfig(exclude_keywords=["고령자", "실버", "영구임대", "국민임대"])
+    gungmin = _notice(
+        HOUSE_NM="용인시 용인구갈8 국민임대 예비입주자 모집공고", SUBSCRPT_AREA_CODE_NM="경기"
+    )
+    matched, fails = match_notice(gungmin, [], cfg, today=TODAY)
+    assert matched is False and "제외키워드" in fails
+    # 신혼 트랙에서 유효한 행복주택·10년 공공임대는 계속 통과 (경계값)
+    happy = _notice(HOUSE_NM="여주역세권 행복주택 예비입주자 모집", SUBSCRPT_AREA_CODE_NM="경기")
+    public10 = _notice(HOUSE_NM="김포한강 10년 공공임대주택리츠 예비입주자 모집", SUBSCRPT_AREA_CODE_NM="경기")
+    assert "제외키워드" not in match_notice(happy, [], cfg, today=TODAY)[1]
+    assert "제외키워드" not in match_notice(public10, [], cfg, today=TODAY)[1]
