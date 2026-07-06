@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # 세션 쿠키 Secure 속성(HTTPS 전용). 프로덕션 기본 True, 로컬(http)은 .env에서 false.
     session_https_only: bool = True
 
+    # 알림에 붙는 서비스 상세페이지 링크의 베이스 URL. 비우면 링크 미표시.
+    public_base_url: str = "https://chungyak.duckdns.org"
+
     # 카카오맵 JavaScript 앱키(상세페이지 지도). 도메인 제한으로 보호됨.
     kakao_js_key: str = ""
     # V-World 인증키(필지 폴리곤 조회, 서버측)

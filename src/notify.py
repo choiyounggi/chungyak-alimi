@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
 from .config import settings
@@ -24,6 +26,9 @@ def format_notice(notice, house_types) -> str:
     ]
     if notice.pblanc_url:
         lines.append(f"🔗 {notice.pblanc_url}")
+    if settings.public_base_url:
+        base = settings.public_base_url.rstrip("/")
+        lines.append(f"🔎 {base}/notice/{quote(notice.pblanc_no, safe='')}")
     return "\n".join(lines)
 
 

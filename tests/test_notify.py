@@ -61,6 +61,36 @@ def test_format_no_price():
     assert "-" in txt
 
 
+# ── 포맷: 서비스 상세페이지 링크 포함 ──
+def test_format_contains_service_link(monkeypatch):
+    from src import notify
+
+    monkeypatch.setattr(notify.settings, "public_base_url", "https://chungyak.duckdns.org")
+    n = _notice(PBLANC_NO="2026000001")
+    txt = format_notice(n, [])
+    assert "https://chungyak.duckdns.org/notice/2026000001" in txt
+
+
+# ── 포맷: 공고번호 URL 인코딩 + base 뒤 슬래시 정규화 (경계값) ──
+def test_format_service_link_encodes_pblanc_no(monkeypatch):
+    from src import notify
+
+    monkeypatch.setattr(notify.settings, "public_base_url", "https://example.com/")
+    n = _notice(PBLANC_NO="LH 2026/01")
+    txt = format_notice(n, [])
+    assert "https://example.com/notice/LH%202026%2F01" in txt
+    assert "example.com//notice" not in txt
+
+
+# ── 포맷: base URL 비우면 서비스 링크 미표시 ──
+def test_format_service_link_disabled(monkeypatch):
+    from src import notify
+
+    monkeypatch.setattr(notify.settings, "public_base_url", "")
+    txt = format_notice(_notice(), [])
+    assert "/notice/" not in txt
+
+
 # ── 발송: 성공 페이로드 검증 ──
 def test_send_telegram_payload():
     captured = {}
