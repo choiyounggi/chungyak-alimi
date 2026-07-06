@@ -78,6 +78,25 @@ def test_score_points_low_bounds():
     assert score_points(p2, today=TODAY)["homeless"] == 0
 
 
+# ── 가점: 만30세 미만 미혼 → 무주택기간 미기산 0점 (경계값) ──
+def test_score_points_under_30_single():
+    p = _profile(birth_date=date(1996, 11, 6), marriage_date=None, dependents=0)
+    s = score_points(p, today=TODAY)
+    assert s["homeless"] == 0
+    assert s["dependents"] == 5  # 부양가족 0명 기본 5점
+
+
+# ── 신혼: 예비신혼부부(engaged) → 자격 인정 + 안내 문구 ──
+def test_newlywed_engaged():
+    p = _profile(marriage_date=None, engaged=True)
+    out = judge_newlywed(p, today=TODAY)
+    assert out["eligible"] is True and out["tier"] == "우선공급"
+    assert any("예비신혼부부" in x for x in out["reasons"])
+    # 생초는 혼인신고 전이면 1인가구 트랙(추첨제)
+    single = _profile(marriage_date=None, engaged=True, children_minor=0)
+    assert judge_first_life(single, today=TODAY)["tier"] == "추첨제"
+
+
 # ── 무주택기간: 30세 이전 혼인 시 혼인신고일 기산 ──
 def test_homeless_years_early_marriage():
     p = _profile(birth_date=date(2000, 1, 1), marriage_date=date(2024, 1, 1))

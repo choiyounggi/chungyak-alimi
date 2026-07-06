@@ -45,6 +45,7 @@ class FirstLifeInfo(BaseModel):
 class Profile(BaseModel):
     birth_date: date | None = None
     marriage_date: date | None = None  # 혼인신고일(미혼 null)
+    engaged: bool = False  # 예비신혼부부(입주 전 혼인신고 예정 — 신혼 특공 신청 가능)
     is_household_head: bool = False  # 세대주
     household_all_homeless: bool = True  # 세대구성원 전원 무주택
     homeless_since: date | None = None  # 마지막 주택 처분일(계속 무주택이면 null)
@@ -90,7 +91,10 @@ def score_points(p: Profile, today: date | None = None) -> dict:
     today = today or date.today()
 
     hy = homeless_years(p, today)
-    homeless_pts = min(32, 2 * (int(hy) + 1)) if p.household_all_homeless else 0
+    if not p.household_all_homeless or hy <= 0:
+        homeless_pts = 0  # 유주택 세대 또는 무주택기간 미기산(만30세 미만 미혼)
+    else:
+        homeless_pts = min(32, 2 * (int(hy) + 1))
 
     dependents_pts = min(35, 5 * (p.dependents + 1))
 
@@ -185,9 +189,9 @@ def judge_newlywed(p: Profile, today: date | None = None) -> dict:
     """신혼부부 특공(민영): 혼인 7년 이내 + 무주택세대 + 소득/자산 구간."""
     today = today or date.today()
     reasons: list[str] = []
-    if p.marriage_date is None:
+    if p.marriage_date is None and not p.engaged:
         return {"eligible": False, "tier": None, "reasons": ["미혼"]}
-    my = _full_years(p.marriage_date, today)
+    my = _full_years(p.marriage_date, today) if p.marriage_date else 0.0
     if my > 7:
         reasons.append(f"혼인 {my:.1f}년(>7년)")
     if not p.household_all_homeless:
@@ -198,6 +202,8 @@ def judge_newlywed(p: Profile, today: date | None = None) -> dict:
     pri, gen = NEWLYWED_PRIORITY_PCT, NEWLYWED_GENERAL_PCT
     idx = 1 if p.income.dual_income else 0
     tier, why = _income_tier(_income_pct(p), pri[idx], gen[idx], p)
+    if p.marriage_date is None:
+        why += " · 예비신혼부부(입주 전 혼인신고 필요)"
     if p.children_minor > 0:
         why += f" · 자녀 {p.children_minor}명(구간 내 1순위)"
     return {"eligible": tier not in ("부적격",), "tier": tier, "reasons": [why]}

@@ -4,6 +4,7 @@
 
 birth_date: 1990-01-01 # 생년월일 (무주택기간 기산: 만30세부터)
 marriage_date: 2022-05-01 # 혼인신고일 (미혼이면 null)
+engaged: false # 예비신혼부부(미혼이지만 입주 전 혼인신고 예정) — 신혼 특공 신청 가능
 is_household_head: true # 세대주 여부
 household_all_homeless: true # 세대구성원 전원 무주택
 homeless_since: null # 마지막 주택 처분일 (계속 무주택이면 null)
