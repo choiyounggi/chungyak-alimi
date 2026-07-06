@@ -140,6 +140,10 @@ def test_detail_map(seeded, monkeypatch):
     assert 'id="map"' in r.text
     assert "dapi.kakao.com" in r.text
     assert "TESTKAKAOKEY" in r.text
+    # 로드 실패 fallback: sdk onerror + 엔진 부분실패 가드 + 안내 문구
+    assert 'onerror="mapLoadFailed()"' in r.text
+    assert "지도를 불러오지 못했어요" in r.text
+    assert "새로고침" in r.text
 
 
 def test_detail_no_map_without_key(seeded, monkeypatch):

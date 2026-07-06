@@ -154,9 +154,31 @@
   </div>
 
   {% if adres and kakao_key %}
-  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services"></script>
+  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services" onerror="mapLoadFailed()"></script>
   <script>
-    kakao.maps.load(function () {
+    // 카카오 지도 로드 실패 안내 — sdk.js 자체 실패(onerror) + 지도 엔진(t1.daumcdn.net)
+    // 타임아웃/부분 로드까지 커버한다. (사례: CDN 지연으로 LatLng is not a constructor)
+    function mapLoadFailed() {
+      var el = document.getElementById('map');
+      if (!el || el.dataset.ready === '1') return;
+      el.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--mut);font-size:13.5px">' +
+        '<span style="font-size:28px">🗺️</span>' +
+        '<b style="color:var(--sub)">지도를 불러오지 못했어요</b>' +
+        '<span>카카오 지도 서버 연결이 원활하지 않아요. 잠시 후 새로고침 해주세요.</span>' +
+        '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:10px;cursor:pointer">새로고침</button>' +
+        '</div>';
+    }
+
+    (function () {
+      if (!(window.kakao && kakao.maps && kakao.maps.load)) { mapLoadFailed(); return; }
+      var failTimer = setTimeout(mapLoadFailed, 12000); // 엔진 로드가 끝내 안 오는 경우
+      kakao.maps.load(function () {
+      clearTimeout(failTimer);
+      // 엔진 스크립트가 부분 실패하면 load 콜백이 와도 생성자가 비어 있다
+      if (!(kakao.maps.LatLng && kakao.maps.Map && kakao.maps.services)) { mapLoadFailed(); return; }
+      try {
+      document.getElementById('map').dataset.ready = '1';
       var map = new kakao.maps.Map(document.getElementById('map'), {
         center: new kakao.maps.LatLng(37.5665, 126.978), level: 5
       });
@@ -189,7 +211,9 @@
           if (s2 === kakao.maps.services.Status.OK) { place(r2); }
         });
       });
-    });
+      } catch (e) { document.getElementById('map').dataset.ready = ''; mapLoadFailed(); }
+      });
+    })();
   </script>
   {% endif %}
 </body>
