@@ -114,7 +114,12 @@ def enrich_lh_detail() -> int:
         for n in session.scalars(q).all():
             r = n.raw or {}
             d0 = r.get("_lh_detail")
-            if d0 and "images" in d0:  # 이미 보강됨(구버전엔 images 키가 없어 1회 재보강)
+            # 이미 보강됨 — 단 구버전(images 키 없음)과 뷰어 URL 세대(lhImageView 미해석)는 1회 재보강
+            if (
+                d0
+                and "images" in d0
+                and not any("lhImageView" in (im.get("url") or "") for im in d0["images"])
+            ):
                 continue
             try:
                 d = fetch_lh_detail(

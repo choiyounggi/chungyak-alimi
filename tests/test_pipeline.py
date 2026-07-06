@@ -158,4 +158,22 @@ def test_enrich_lh_detail(monkeypatch):
     calls.clear()
     assert pipeline.enrich_lh_detail() == 1
     assert calls == ["LHD1"]
+
+    # 뷰어 URL 세대(lhImageView 미해석 이미지)도 1회 재보강된다
+    with SessionLocal() as s:
+        n4 = s.scalar(select(Notice).where(Notice.pblanc_no == "LHD1"))
+        viewer_era = {
+            **n4.raw["_lh_detail"],
+            "images": [{"label": "단지조감도", "name": "a.jpg",
+                        "url": "https://apply.lh.or.kr/lhapply/lhImageView2.do?fileid=9"}],
+        }
+        s.execute(
+            pipeline.update(Notice)
+            .where(Notice.pblanc_no == "LHD1")
+            .values(raw={**n4.raw, "_lh_detail": viewer_era})
+        )
+        s.commit()
+    calls.clear()
+    assert pipeline.enrich_lh_detail() == 1
+    assert calls == ["LHD1"]
     _cleanup()

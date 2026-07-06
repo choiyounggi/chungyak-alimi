@@ -173,9 +173,16 @@ DTL_RESPONSE = [
 ]
 
 
-# ── 상세정보 파싱: 주소 결합 · 서류제출 기간 · 공고전문 ──
+_VIEWER_HTML = '''<!DOCTYPE html><html><body>
+<img src="/upload/Files/upload_dec/2026/HSL/06/12/real_image.jpg" alt="" onerror="this.src='/images/co/na/noImg.gif'"/>
+</body></html>'''
+
+
+# ── 상세정보 파싱: 주소 결합 · 서류제출 기간 · 공고전문 · 이미지 뷰어 해석 ──
 def test_fetch_lh_detail():
     def handler(request: httpx.Request) -> httpx.Response:
+        if "lhImageView2.do" in str(request.url):
+            return httpx.Response(200, text=_VIEWER_HTML)
         return httpx.Response(200, json=DTL_RESPONSE)
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as c:
@@ -184,13 +191,25 @@ def test_fetch_lh_detail():
     assert d["schedule"][0]["anc"] == "2026-08-19"
     assert d["schedule"][0]["sbm"] == "2026-08-26 ~ 2026-08-30"  # 서류제출 기간
     assert "공급위치" in d["pan_dtl_cts"]
-    # 이미지: 라벨 행(URL='다운로드')은 제외되고 실제 jpg만
+    # 이미지: 라벨 행(URL='다운로드') 제외 + 뷰어 URL은 실제 파일 URL로 해석됨
     assert d["images"] == [{
         "label": "단지조감도", "name": "단지조감도.jpg",
-        "url": "https://apply.lh.or.kr/lhapply/lhImageView2.do?fileid=1",
+        "url": "https://apply.lh.or.kr/upload/Files/upload_dec/2026/HSL/06/12/real_image.jpg",
     }]
     # 첨부: PDF만(비PDF hwp 제외)
     assert [f["name"] for f in d["files"]] == ["모집공고문.pdf"]
+
+
+# ── 이미지 뷰어 해석 실패(5xx/이미지태그 없음) 시 원본 URL 유지 (에러 케이스) ──
+def test_fetch_lh_detail_viewer_resolve_fallback():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "lhImageView2.do" in str(request.url):
+            return httpx.Response(500)
+        return httpx.Response(200, json=DTL_RESPONSE)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as c:
+        d = fetch_lh_detail(pan_id="P", ccr="02", spl="050", upp="05", ais="05", client=c)
+    assert d["images"][0]["url"] == "https://apply.lh.or.kr/lhapply/lhImageView2.do?fileid=1"
 
 
 # ── 상세정보: SS_CODE 오류면 None ──
