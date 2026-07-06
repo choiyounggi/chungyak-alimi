@@ -8,5 +8,5 @@ supply_types: []                   # 공급유형: [] = 전체(모두)
 special_supply: ["생애최초", "신혼부부"]  # 관심 특별공급
 min_households: null               # 총공급세대 하한: null = 제한없음
 price_max_manwon: 80000            # 분양가 상한(만원): 8억
-exclude_keywords: []               # 제외 키워드
+exclude_keywords: ["고령자", "실버", "영구임대"]  # 제외 키워드 — 연령제한(고령자·실버)·수급자 대상(영구임대) 공고는 비해당 (2026-07-06)
 only_open: true                    # 접수마감 지난 공고 제외(미래/진행 청약만)
