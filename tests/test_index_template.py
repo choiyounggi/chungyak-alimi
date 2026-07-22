@@ -11,7 +11,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import jinja2
-import pytest
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "web" / "templates"
 INDEX = TEMPLATES / "index.html"
