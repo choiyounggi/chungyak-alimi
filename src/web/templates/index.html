@@ -6,10 +6,14 @@
   /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base 토큰 참조 */
   .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
   .count{color:var(--accent-teal);font-weight:700}
-  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 22px}
-  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리 */
+  .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px}
+  .filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .filter-label{font-size:12px;font-weight:700;color:var(--muted);flex:none;margin-right:2px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
   .head-row .badge{flex:none}
-  a.title{color:var(--ink);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4}
+  a.title{color:var(--ink);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4;flex:1 1 auto;min-width:0}
   a.title:hover{color:var(--accent-teal)}
   .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--body)}
   .row b{color:var(--body-strong);font-weight:700}
@@ -24,19 +28,31 @@
   </div>
 
   <div class="filters">
-    {% for r in cfg.regions %}
-    <button class="chip" data-ftype="area" data-fval="{{ r }}">{{ r }}</button>
-    {% else %}<span class="chip">전국</span>{% endfor %}
-    {% for t in cfg.house_types %}
-    <button class="chip" data-ftype="secd" data-fval="{{ t }}">{{ t }}</button>
-    {% else %}<span class="chip">전체 유형</span>{% endfor %}
-    {% for sp in cfg.special_supply %}
-    <button class="chip" data-ftype="special" data-fval="{{ sp }}">{{ sp }}</button>
-    {% endfor %}
-    <button class="chip" data-ftype="rank" data-fval="1순위">1순위</button>
-    <button class="chip" data-ftype="rank" data-fval="2순위">2순위</button>
-    <span class="chip">{{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
-    <span class="chip">{{ '진행·예정만' if cfg.only_open else '전체' }}</span>
+    <div class="filter-group">
+      <span class="filter-label">필터 · 다중 선택</span>
+      <div class="chips">
+        {% for r in cfg.regions %}
+        <button type="button" class="chip" data-ftype="area" data-fval="{{ r }}" aria-pressed="false">{{ r }}</button>
+        {% endfor %}
+        {% for t in cfg.house_types %}
+        <button type="button" class="chip" data-ftype="secd" data-fval="{{ t }}" aria-pressed="false">{{ t }}</button>
+        {% endfor %}
+        {% for sp in cfg.special_supply %}
+        <button type="button" class="chip" data-ftype="special" data-fval="{{ sp }}" aria-pressed="false">{{ sp }}</button>
+        {% endfor %}
+        <button type="button" class="chip" data-ftype="rank" data-fval="1순위" aria-pressed="false">1순위</button>
+        <button type="button" class="chip" data-ftype="rank" data-fval="2순위" aria-pressed="false">2순위</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">고정 조건</span>
+      <div class="chips">
+        {% if not cfg.regions %}<span class="chip chip--info">전국</span>{% endif %}
+        {% if not cfg.house_types %}<span class="chip chip--info">전체 유형</span>{% endif %}
+        <span class="chip chip--info">{{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
+        <span class="chip chip--info">{{ '진행·예정만' if cfg.only_open else '전체' }}</span>
+      </div>
+    </div>
   </div>
 
   {% if not items %}
@@ -82,24 +98,32 @@
 
 {% block scripts %}
 <script>
-// 칩 필터: 한 번에 하나만 활성(다른 칩 클릭 시 교체), 활성 칩 재클릭 시 해제.
+// 칩 필터(다중 선택): 같은 종류(type) 안은 OR, 종류 간은 AND. 칩 재클릭 시 해제.
 (function () {
   var chips = Array.prototype.slice.call(document.querySelectorAll("button.chip"));
   var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
   var countEl = document.querySelector(".count");
   var emptyEl = document.getElementById("js-empty");
-  var active = null; // {type, val, el}
+  var active = {}; // { type: [선택된 값들] }
+
+  function matchesType(card, type, vals) {
+    if (type === "area") return vals.indexOf(card.dataset.area) !== -1;
+    if (type === "rank") return vals.indexOf(card.dataset.rank) !== -1;
+    if (type === "secd") return vals.indexOf(card.dataset.secd) !== -1;
+    if (type === "special") {
+      // 라벨 표기가 축약될 수 있어(예: 노부모↔노부모부양) 접두 일치 허용
+      var have = (card.dataset.specials || "").split("|").filter(Boolean);
+      return vals.some(function (v) {
+        return have.some(function (s) { return s.indexOf(v) === 0 || v.indexOf(s) === 0; });
+      });
+    }
+    return true;
+  }
 
   function matches(card) {
-    if (!active) return true;
-    if (active.type === "area") return card.dataset.area === active.val;
-    if (active.type === "rank") return card.dataset.rank === active.val;
-    if (active.type === "secd") return card.dataset.secd === active.val;
-    if (active.type === "special") {
-      // 라벨 표기가 축약될 수 있어(예: 노부모↔노부모부양) 접두 일치 허용
-      return (card.dataset.specials || "").split("|").some(function (s) {
-        return s && (s.indexOf(active.val) === 0 || active.val.indexOf(s) === 0);
-      });
+    for (var type in active) {
+      if (!active[type] || !active[type].length) continue;
+      if (!matchesType(card, type, active[type])) return false; // 종류 간 AND
     }
     return true;
   }
@@ -117,13 +141,17 @@
 
   chips.forEach(function (chip) {
     chip.addEventListener("click", function () {
-      var isSame = active && active.el === chip;
-      chips.forEach(function (c) { c.classList.remove("active"); });
-      if (isSame) {
-        active = null;
-      } else {
-        active = { type: chip.dataset.ftype, val: chip.dataset.fval, el: chip };
+      var type = chip.dataset.ftype, val = chip.dataset.fval;
+      var set = active[type] || (active[type] = []);
+      var i = set.indexOf(val);
+      if (i === -1) {                       // 선택
+        set.push(val);
         chip.classList.add("active");
+        chip.setAttribute("aria-pressed", "true");
+      } else {                              // 해제
+        set.splice(i, 1);
+        chip.classList.remove("active");
+        chip.setAttribute("aria-pressed", "false");
       }
       apply();
     });

@@ -157,3 +157,39 @@ def test_index_source_no_emoji_and_extends_base():
     # base 재정의 금지: 자체 <!DOCTYPE>/<head>/:root 없어야 함
     assert "<!DOCTYPE" not in raw
     assert ":root{" not in raw
+
+
+# ── 필터: 클릭 가능 vs 고정 구분 + 다중 선택(정상 케이스) ──
+def test_filter_groups_distinguish_clickable_and_fixed():
+    out = _render([_item()], _cfg())
+    # 두 그룹 라벨로 시각적 구분
+    assert "필터 · 다중 선택" in out
+    assert "고정 조건" in out
+    # 클릭 가능 필터: button.chip + aria-pressed(다중 선택 토글 상태)
+    assert 'data-ftype="area"' in out and 'aria-pressed="false"' in out
+    # 고정 조건: 읽기 전용 chip--info (가격/상태). button 아님
+    assert "chip chip--info" in out
+    assert "60,000만원 이하" in out and "진행·예정만" in out
+
+
+# ── 필터: 다중 선택 JS 계약(타입 내 OR / 타입 간 AND, 재클릭 해제) ──
+def test_filter_multiselect_js_present():
+    raw = INDEX.read_text(encoding="utf-8")
+    # 다중 선택 자료구조: 타입별 선택 값 집합
+    assert "active[type]" in raw
+    # 종류 간 AND 주석/로직 흔적
+    assert "AND" in raw and "OR" in raw
+    # 재클릭 시 해제(splice) + aria-pressed 토글
+    assert "splice" in raw
+    assert 'setAttribute("aria-pressed"' in raw
+    # 과거 단일 선택(active = null) 잔재 없음
+    assert "var active = null" not in raw
+
+
+# ── 경계: 지역/유형 미설정 시 '전국/전체 유형'이 고정 조건으로 표기 ──
+def test_fixed_fallbacks_when_no_region_type():
+    out = _render([_item()], _cfg(regions=[], house_types=[]))
+    assert "전국" in out and "전체 유형" in out
+    # 폴백은 고정(chip--info)으로만, 클릭 가능한 area/secd 버튼은 없어야 함
+    assert 'data-ftype="area"' not in out
+    assert 'data-ftype="secd"' not in out

@@ -73,16 +73,21 @@
 
   /* 필터 칩 */
   .chip{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-pill);padding:7px 14px;
-    font-size:13px;font-weight:600;color:var(--body);font-family:inherit}
-  button.chip{cursor:pointer}
+    font-size:13px;font-weight:600;color:var(--body);font-family:inherit;line-height:1.2}
+  /* 클릭 가능한 필터 칩 — 상호작용 어포던스(테두리·hover·선택 채움) */
+  button.chip{cursor:pointer;transition:border-color .12s,background-color .12s,color .12s}
   button.chip:hover{border-color:var(--ink);color:var(--ink)}
-  button.chip.active{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  button.chip.active{background:var(--accent-teal);border-color:var(--accent-teal);color:var(--on-teal)}
+  /* 고정(읽기 전용) 조건 칩 — 클릭 불가임을 구분: 점선 테두리 + 소프트 배경 + 뮤트 텍스트 */
+  .chip--info{background:var(--surface-soft);border:1px dashed var(--hairline);color:var(--muted);cursor:default}
 
   /* 테이블 */
   .table{width:100%;border-collapse:collapse}
-  .table th,.table td{padding:9px 8px;border-bottom:1px solid var(--hairline);text-align:right}
+  .table th,.table td{padding:9px 8px;border-bottom:1px solid var(--hairline);text-align:right;white-space:nowrap}
   .table th:first-child,.table td:first-child{text-align:left}
   .table th{color:var(--muted);font-size:12.5px;font-weight:700}
+  /* 넓은 테이블은 모바일에서 가로 스크롤(줄바꿈/화면깨짐 방지) */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 
   /* 폼 */
   label{display:block;font-size:13px;font-weight:700;color:var(--body);margin:0 0 6px}
@@ -105,6 +110,22 @@
 
   /* SVG 아이콘 헬퍼 */
   .ic{width:1em;height:1em;vertical-align:-0.15em;stroke:currentColor;fill:none;flex-shrink:0}
+
+  /* 한글 줄바꿈: 단어 중간 끊김 방지, 긴 토큰(URL 등)만 강제 줄바꿈 */
+  body{word-break:keep-all;overflow-wrap:anywhere}
+  /* 이미지가 컨테이너를 넘지 않도록 */
+  img{max-width:100%}
+
+  /* ── 반응형: 모바일(≤640px) — 줄바꿈/화면깨짐 방지 ── */
+  @media (max-width:640px){
+    .topbar .inner{padding:14px 16px}
+    .wrap{padding:18px 16px 60px}
+    h1{font-size:25px}
+    .display{font-size:28px}
+    .card,.section{padding:15px 16px}
+    .table th,.table td{padding:8px 7px;font-size:12px}
+    .footer{padding:32px 16px}
+  }
 </style>
 {% block head %}{% endblock %}
 </head>

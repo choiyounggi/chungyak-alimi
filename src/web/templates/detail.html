@@ -94,6 +94,7 @@
   {% if lh_schedule %}
   <section class="section">
     <h2><svg class="ic"><use href="#i-calendar"></use></svg> 공급구분별 일정</h2>
+    <div class="table-wrap">
     <table class="table">
       <thead><tr><th>구분</th><th>신청일시</th><th>당첨발표</th><th>서류제출</th><th>계약</th></tr></thead>
       <tbody>
@@ -102,12 +103,14 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </section>
   {% endif %}
 
   {% if rows %}
   <section class="section">
     <h2><svg class="ic"><use href="#i-home"></use></svg> 주택형별 모집</h2>
+    <div class="table-wrap">
     <table class="table">
       <thead><tr><th>주택형</th><th>면적(㎡)</th><th>분양가(만원)</th><th>일반</th><th>특별공급</th></tr></thead>
       <tbody>
@@ -123,6 +126,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </section>
   {% endif %}
 

@@ -79,8 +79,10 @@ def test_base_defines_every_component_selector():
         assert sel in out, f"컴포넌트 셀렉터 계약 누락: {sel}"
     # 크림 푸터(다크 아님) — 배경이 surface-soft 토큰
     assert "background:var(--surface-soft)" in out
-    # 칩 active 상태는 primary 채움
-    assert "button.chip.active{background:var(--primary)" in out
+    # 선택된 필터 칩은 teal 채움(클릭 가능 필터를 CTA 버튼과 구분)
+    assert "button.chip.active{background:var(--accent-teal)" in out
+    # 고정(읽기 전용) 조건 칩 변형 — 클릭 불가 시각 구분
+    assert ".chip--info{" in out
     # 기본 topbar: 브랜드 워드마크
     assert 'class="brand"' in out
     assert "청약 알리미" in out
