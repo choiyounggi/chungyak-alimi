@@ -1,62 +1,48 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>로그인 · 청약 알리미</title>
+{% extends "base.html" %}
+{% block title %}로그인 · 청약 알리미{% endblock %}
+
+{% block head %}
 <style>
-  :root{
-    --carrot:#FF6F0F; --carrot-dark:#E55F00; --carrot-soft:#FFF3EA;
-    --surface:#F7F8F9; --card:#FFFFFF; --tx:#212124; --sub:#4D5159; --mut:#868B94; --line:#EDEEEF; --danger:#F5484A;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:var(--surface);color:var(--tx);
-    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
-    -webkit-font-smoothing:antialiased;display:flex;align-items:center;justify-content:center;padding:20px}
-  .box{width:100%;max-width:380px}
-  .brand{text-align:center;margin-bottom:22px}
-  .brand .title{font-size:26px;font-weight:800;letter-spacing:-.03em;color:var(--carrot)}
-  .brand .desc{color:var(--mut);font-size:13.5px;margin-top:4px}
-  form{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 24px;
-    box-shadow:0 2px 10px rgba(0,0,0,.04)}
-  label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:0 0 6px}
-  input{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:12px;font-size:15px;
-    background:#fff;color:var(--tx);outline:none;transition:border-color .15s}
-  input:focus{border-color:var(--carrot)}
-  input.invalid{border-color:var(--danger);background:#FFF7F7}
-  .field{margin-bottom:16px}
-  .field-error{display:none;color:var(--danger);font-size:12.5px;font-weight:600;margin-top:6px}
-  .field.has-error .field-error{display:block}
-  button{width:100%;padding:14px;background:var(--carrot);color:#fff;border:none;border-radius:12px;
-    font-size:16px;font-weight:800;cursor:pointer;transition:background .15s;margin-top:4px}
-  button:hover{background:var(--carrot-dark)}
-  .form-error{background:#FDECEC;color:var(--danger);border-radius:10px;padding:11px 13px;font-size:13.5px;
-    font-weight:600;margin-bottom:16px;display:flex;gap:7px;align-items:center}
+  /* 로그인 전용: base body는 중앙정렬이 아니므로 이 페이지에서만 flex center */
+  body{min-height:100vh;display:flex;align-items:center;justify-content:center}
+  /* base .wrap(max-width:840·pad 22/20/72)을 로그인 박스로 재정의 (brief .box{max-width:380px} 실현) */
+  main.wrap{width:100%;max-width:380px;padding:24px 20px}
+  /* 브랜드 영역 중앙정렬 + 포인트 teal 타이틀 */
+  .login-head{text-align:center;margin-bottom:var(--s-lg)}
+  .login-head h1{color:var(--accent-teal)}
+  /* 경고 배너: 아이콘+텍스트 정렬(기존 login의 flex 정렬 보존; base .form-error는 display:block) */
+  .form-error{display:flex;gap:var(--s-xs);align-items:center}
+  /* 제출 버튼 풀폭(base .btn은 inline-flex) */
+  form .btn-primary{width:100%;margin-top:var(--s-xxs)}
 </style>
-</head>
-<body>
-  <div class="box">
-    <div class="brand">
-      <div class="title">청약 알리미</div>
-      <div class="desc">내 관심 청약을 한눈에</div>
-    </div>
-    <!-- novalidate: 브라우저 기본 검증 팝업(시스템 알럿) 비활성화 → 서버 인라인 에러로 안내 -->
-    <form method="post" action="/login" novalidate>
-      {% if errors.form %}<div class="form-error">⚠️ {{ errors.form }}</div>{% endif %}
-      <div class="field {{ 'has-error' if errors.username else '' }}">
-        <label for="username">아이디</label>
-        <input id="username" name="username" type="text" autocomplete="username"
-               value="{{ username or '' }}" class="{{ 'invalid' if errors.username else '' }}" autofocus>
-        <div class="field-error">{{ errors.username or '' }}</div>
-      </div>
-      <div class="field {{ 'has-error' if errors.password else '' }}">
-        <label for="password">비밀번호</label>
-        <input id="password" name="password" type="password" autocomplete="current-password"
-               class="{{ 'invalid' if errors.password else '' }}">
-        <div class="field-error">{{ errors.password or '' }}</div>
-      </div>
-      <button type="submit">로그인</button>
-    </form>
+{% endblock %}
+
+{% block topbar %}{% endblock %}
+
+{% block content %}
+<div class="login-head">
+  <h1>청약 알리미</h1>
+  <p class="sub">내 관심 청약을 한눈에</p>
+</div>
+<!-- novalidate: 브라우저 기본 검증 팝업(시스템 알럿) 비활성화 → 서버 인라인 에러로 안내 -->
+<form method="post" action="/login" novalidate>
+  {% if errors.form %}
+  <div class="form-error">
+    <svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg>{{ errors.form }}
   </div>
-</body>
-</html>
+  {% endif %}
+  <div class="field {{ 'has-error' if errors.username else '' }}">
+    <label for="username">아이디</label>
+    <input id="username" name="username" type="text" autocomplete="username"
+           value="{{ username or '' }}" class="{{ 'invalid' if errors.username else '' }}" autofocus>
+    <div class="field-error">{{ errors.username or '' }}</div>
+  </div>
+  <div class="field {{ 'has-error' if errors.password else '' }}">
+    <label for="password">비밀번호</label>
+    <input id="password" name="password" type="password" autocomplete="current-password"
+           class="{{ 'invalid' if errors.password else '' }}">
+    <div class="field-error">{{ errors.password or '' }}</div>
+  </div>
+  <button type="submit" class="btn btn-primary">로그인</button>
+</form>
+{% endblock %}
