@@ -5,6 +5,8 @@
 <style>
   /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base 토큰 참조 */
   .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  .head h1{font-size:24px}
+  @media (max-width:640px){ .head h1{font-size:21px} }
   .count{color:var(--accent-teal);font-weight:700}
   /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리 */
   .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px}
