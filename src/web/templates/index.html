@@ -1,169 +1,161 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>청약 알리미</title>
+{% extends "base.html" %}
+{% block title %}청약 알리미{% endblock %}
+
+{% block head %}
 <style>
-  :root{
-    --carrot:#FF6F0F; --carrot-dark:#E55F00; --carrot-soft:#FFF3EA;
-    --bg:#FFFFFF; --surface:#F7F8F9; --card:#FFFFFF;
-    --tx:#212124; --sub:#4D5159; --mut:#868B94; --line:#EDEEEF;
-    --ok:#00A05B; --warn:#FF8A00; --danger:#F5484A;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--surface);color:var(--tx);
-    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
-    -webkit-font-smoothing:antialiased}
-  .topbar{background:var(--carrot);color:#fff}
-  .topbar .inner{max-width:840px;margin:0 auto;padding:18px 20px;display:flex;align-items:center;gap:10px}
-  .logo{font-size:20px;font-weight:800;letter-spacing:-.02em}
-  .logo .em{margin-right:4px}
-  .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
+  /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base 토큰 참조 */
   .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
-  h1{font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0}
-  .sub{color:var(--mut);font-size:13.5px}
-  .count{color:var(--carrot);font-weight:800}
-  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 22px}
-  .chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;color:var(--sub);font-weight:600;font-family:inherit}
-  .chip b{color:var(--carrot)}
-  button.chip{cursor:pointer;transition:background .15s,color .15s,border-color .15s}
-  button.chip:hover{border-color:var(--carrot);color:var(--carrot)}
-  button.chip.active{background:var(--carrot);border-color:var(--carrot);color:#fff}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin:12px 0;
-    box-shadow:0 1px 3px rgba(0,0,0,.03);transition:box-shadow .18s,transform .18s}
-  .card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);transform:translateY(-2px)}
-  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-  a.title{color:var(--tx);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4}
-  a.title:hover{color:var(--carrot)}
-  .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--sub)}
-  .row b{color:var(--tx);font-weight:700}
-  .area-tag{font-size:12px;font-weight:700;color:var(--carrot);background:var(--carrot-soft);padding:3px 10px;border-radius:999px}
-  .rank-tag{font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px}
-  .rank-1{color:#00754A;background:#E6F6EE}
-  .rank-2{color:#8A6D00;background:#FFF6DC}
-  .badge{flex:none;display:inline-block;font-size:12.5px;font-weight:800;padding:4px 11px;border-radius:999px;white-space:nowrap}
-  .dday-soon{color:#fff;background:var(--danger)}
-  .dday-mid{color:#fff;background:var(--warn)}
-  .dday-far{color:var(--ok);background:#E6F6EE}
-  .dday-pre{color:var(--carrot);background:var(--carrot-soft)}
-  .addr{color:var(--mut);font-size:13px}
-  .empty{text-align:center;color:var(--mut);padding:64px 0}
-  .empty .em{font-size:40px;display:block;margin-bottom:10px}
-  footer{margin-top:30px;color:var(--mut);font-size:12px;text-align:center}
+  .count{color:var(--accent-teal);font-weight:700}
+  /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리 */
+  .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px}
+  .filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .filter-label{font-size:12px;font-weight:700;color:var(--muted);flex:none;margin-right:2px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .head-row .badge{flex:none}
+  a.title{color:var(--ink);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4;flex:1 1 auto;min-width:0}
+  a.title:hover{color:var(--accent-teal)}
+  .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--body)}
+  .row b{color:var(--body-strong);font-weight:700}
+  .row .ic{color:var(--muted)}
 </style>
-</head>
-<body>
-  <div class="topbar"><div class="inner"><span class="logo">청약 알리미</span></div></div>
-  <div class="wrap">
-    <div class="head">
-      <h1>내 관심 청약</h1>
-      <span class="sub">{{ today }} 기준 · <span class="count">{{ items|length }}</span>건</span>
-    </div>
+{% endblock %}
 
-    <div class="filters">
-      {% for r in cfg.regions %}
-      <button class="chip" data-ftype="area" data-fval="{{ r }}">📍 {{ r }}</button>
-      {% else %}<span class="chip">📍 <b>전국</b></span>{% endfor %}
-      {% for t in cfg.house_types %}
-      <button class="chip" data-ftype="secd" data-fval="{{ t }}">🏘 {{ t }}</button>
-      {% else %}<span class="chip">🏘 전체 유형</span>{% endfor %}
-      {% for sp in cfg.special_supply %}
-      <button class="chip" data-ftype="special" data-fval="{{ sp }}">🎁 {{ sp }}</button>
-      {% endfor %}
-      <button class="chip" data-ftype="rank" data-fval="1순위">🏅 1순위</button>
-      <button class="chip" data-ftype="rank" data-fval="2순위">🏅 2순위</button>
-      <span class="chip">💰 {{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
-      <span class="chip">⏰ {{ '진행·예정만' if cfg.only_open else '전체' }}</span>
-    </div>
-
-    {% if not items %}
-      <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
-    {% endif %}
-    <div class="empty" id="js-empty" style="display:none">
-      <span class="em">🔍</span>선택한 필터에 맞는 공고가 없어요.
-    </div>
-
-    {% for it in items %}
-    {% set n = it.notice %}
-    <div class="card" data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}" data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}">
-      <div class="head-row">
-        <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
-        {% if it.dday is not none %}
-          {% if it.dday < 0 %}<span class="badge dday-pre">D+{{ -it.dday }} 예정</span>
-          {% elif it.dday <= 3 %}<span class="badge dday-soon">D-{{ it.dday }} 임박</span>
-          {% elif it.dday <= 7 %}<span class="badge dday-mid">D-{{ it.dday }}</span>
-          {% else %}<span class="badge dday-far">D-{{ it.dday }}</span>{% endif %}
-        {% endif %}
-      </div>
-      <div class="row">
-        <span class="area-tag">{{ n.area_nm or '-' }}</span>
-        {% if it.my_rank %}<span class="rank-tag {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">🏅 {{ it.my_rank }}</span>{% endif %}
-        <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
-      </div>
-      {% if it.adres %}<div class="row"><span class="addr">📍 {{ it.adres }}</span></div>{% endif %}
-      <div class="row">
-        <span>🗓 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
-      </div>
-      <div class="row">
-        {% if it.price_lo %}<span>💰 <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
-        {% if it.area_lo %}<span>📐 {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
-        <span>🏢 {{ n.tot_suply_hshldco or '-' }}세대</span>
-      </div>
-    </div>
-    {% endfor %}
-
-    <footer>chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
+{% block content %}
+  <div class="head">
+    <h1>내 관심 청약</h1>
+    <span class="sub">{{ today }} 기준 · <span class="count">{{ items|length }}</span>건</span>
   </div>
 
-  <script>
-  // 칩 필터: 한 번에 하나만 활성(다른 칩 클릭 시 교체), 활성 칩 재클릭 시 해제.
-  (function () {
-    var chips = Array.prototype.slice.call(document.querySelectorAll("button.chip"));
-    var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
-    var countEl = document.querySelector(".count");
-    var emptyEl = document.getElementById("js-empty");
-    var active = null; // {type, val, el}
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">필터 · 다중 선택</span>
+      <div class="chips">
+        {% for r in cfg.regions %}
+        <button type="button" class="chip" data-ftype="area" data-fval="{{ r }}" aria-pressed="false">{{ r }}</button>
+        {% endfor %}
+        {% for t in cfg.house_types %}
+        <button type="button" class="chip" data-ftype="secd" data-fval="{{ t }}" aria-pressed="false">{{ t }}</button>
+        {% endfor %}
+        {% for sp in cfg.special_supply %}
+        <button type="button" class="chip" data-ftype="special" data-fval="{{ sp }}" aria-pressed="false">{{ sp }}</button>
+        {% endfor %}
+        <button type="button" class="chip" data-ftype="rank" data-fval="1순위" aria-pressed="false">1순위</button>
+        <button type="button" class="chip" data-ftype="rank" data-fval="2순위" aria-pressed="false">2순위</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">고정 조건</span>
+      <div class="chips">
+        {% if not cfg.regions %}<span class="chip chip--info">전국</span>{% endif %}
+        {% if not cfg.house_types %}<span class="chip chip--info">전체 유형</span>{% endif %}
+        <span class="chip chip--info">{{ '%s만원 이하'|format('{:,}'.format(cfg.price_max_manwon)) if cfg.price_max_manwon else '가격 무관' }}</span>
+        <span class="chip chip--info">{{ '진행·예정만' if cfg.only_open else '전체' }}</span>
+      </div>
+    </div>
+  </div>
 
-    function matches(card) {
-      if (!active) return true;
-      if (active.type === "area") return card.dataset.area === active.val;
-      if (active.type === "rank") return card.dataset.rank === active.val;
-      if (active.type === "secd") return card.dataset.secd === active.val;
-      if (active.type === "special") {
-        // 라벨 표기가 축약될 수 있어(예: 노부모↔노부모부양) 접두 일치 허용
-        return (card.dataset.specials || "").split("|").some(function (s) {
-          return s && (s.indexOf(active.val) === 0 || active.val.indexOf(s) === 0);
-        });
-      }
-      return true;
-    }
+  {% if not items %}
+    <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
+  {% endif %}
+  <div class="empty" id="js-empty" style="display:none">
+    <svg class="ic"><use href="#i-search"></use></svg> 선택한 필터에 맞는 공고가 없어요.
+  </div>
 
-    function apply() {
-      var visible = 0;
-      cards.forEach(function (c) {
-        var show = matches(c);
-        c.style.display = show ? "" : "none";
-        if (show) visible++;
+  {% for it in items %}
+  {% set n = it.notice %}
+  <div class="card" data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}" data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}">
+    <div class="head-row">
+      <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
+      {% if it.dday is not none %}
+        {% if it.dday < 0 %}<span class="badge badge--pre">D+{{ -it.dday }} 예정</span>
+        {% elif it.dday <= 3 %}<span class="badge badge--soon">D-{{ it.dday }} 임박</span>
+        {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
+        {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
+      {% endif %}
+    </div>
+    <div class="row">
+      <span class="tag">{{ n.area_nm or '-' }}</span>
+      {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{{ it.my_rank }}</span>{% endif %}
+      <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
+    </div>
+    {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
+    <div class="row">
+      <span><svg class="ic"><use href="#i-calendar"></use></svg> 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
+    </div>
+    <div class="row">
+      {% if it.price_lo %}<span><svg class="ic"><use href="#i-won"></use></svg> <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
+      {% if it.area_lo %}<span><svg class="ic"><use href="#i-ruler"></use></svg> {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
+      <span><svg class="ic"><use href="#i-building"></use></svg> {{ n.tot_suply_hshldco or '-' }}세대</span>
+    </div>
+  </div>
+  {% endfor %}
+{% endblock %}
+
+{% block footer %}
+<footer class="footer">chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 칩 필터(다중 선택): 같은 종류(type) 안은 OR, 종류 간은 AND. 칩 재클릭 시 해제.
+(function () {
+  var chips = Array.prototype.slice.call(document.querySelectorAll("button.chip"));
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+  var countEl = document.querySelector(".count");
+  var emptyEl = document.getElementById("js-empty");
+  var active = {}; // { type: [선택된 값들] }
+
+  function matchesType(card, type, vals) {
+    if (type === "area") return vals.indexOf(card.dataset.area) !== -1;
+    if (type === "rank") return vals.indexOf(card.dataset.rank) !== -1;
+    if (type === "secd") return vals.indexOf(card.dataset.secd) !== -1;
+    if (type === "special") {
+      // 라벨 표기가 축약될 수 있어(예: 노부모↔노부모부양) 접두 일치 허용
+      var have = (card.dataset.specials || "").split("|").filter(Boolean);
+      return vals.some(function (v) {
+        return have.some(function (s) { return s.indexOf(v) === 0 || v.indexOf(s) === 0; });
       });
-      if (countEl) countEl.textContent = visible;
-      if (emptyEl) emptyEl.style.display = cards.length && !visible ? "" : "none";
     }
+    return true;
+  }
 
-    chips.forEach(function (chip) {
-      chip.addEventListener("click", function () {
-        var isSame = active && active.el === chip;
-        chips.forEach(function (c) { c.classList.remove("active"); });
-        if (isSame) {
-          active = null;
-        } else {
-          active = { type: chip.dataset.ftype, val: chip.dataset.fval, el: chip };
-          chip.classList.add("active");
-        }
-        apply();
-      });
+  function matches(card) {
+    for (var type in active) {
+      if (!active[type] || !active[type].length) continue;
+      if (!matchesType(card, type, active[type])) return false; // 종류 간 AND
+    }
+    return true;
+  }
+
+  function apply() {
+    var visible = 0;
+    cards.forEach(function (c) {
+      var show = matches(c);
+      c.style.display = show ? "" : "none";
+      if (show) visible++;
     });
-  })();
-  </script>
-</body>
-</html>
+    if (countEl) countEl.textContent = visible;
+    if (emptyEl) emptyEl.style.display = cards.length && !visible ? "" : "none";
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var type = chip.dataset.ftype, val = chip.dataset.fval;
+      var set = active[type] || (active[type] = []);
+      var i = set.indexOf(val);
+      if (i === -1) {                       // 선택
+        set.push(val);
+        chip.classList.add("active");
+        chip.setAttribute("aria-pressed", "true");
+      } else {                              // 해제
+        set.splice(i, 1);
+        chip.classList.remove("active");
+        chip.setAttribute("aria-pressed", "false");
+      }
+      apply();
+    });
+  });
+})();
+</script>
+{% endblock %}
