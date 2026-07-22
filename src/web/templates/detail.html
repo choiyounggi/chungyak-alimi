@@ -1,343 +1,320 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ notice.house_nm }} · 청약 알리미</title>
+{% extends "base.html" %}
+{% block title %}{{ notice.house_nm }} · 청약 알리미{% endblock %}
+
+{% block head %}
 <style>
-  :root{
-    --carrot:#FF6F0F; --carrot-dark:#E55F00; --carrot-soft:#FFF3EA;
-    --bg:#FFFFFF; --surface:#F7F8F9; --card:#FFFFFF;
-    --tx:#212124; --sub:#4D5159; --mut:#868B94; --line:#EDEEEF;
-    --ok:#00A05B; --warn:#FF8A00; --danger:#F5484A;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--surface);color:var(--tx);
-    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
-    -webkit-font-smoothing:antialiased}
-  .topbar{background:var(--carrot);color:#fff}
-  .topbar .inner{max-width:840px;margin:0 auto;padding:14px 20px}
-  .topbar a{color:#fff;text-decoration:none;font-weight:700;font-size:15px}
-  .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
-  h1{font-size:23px;font-weight:800;letter-spacing:-.03em;margin:6px 0 8px;line-height:1.35}
-  .meta{color:var(--sub);font-size:13.5px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
-  .area-tag{font-size:12px;font-weight:700;color:var(--carrot);background:var(--carrot-soft);padding:3px 10px;border-radius:999px}
+  .meta{color:var(--muted);font-size:13.5px;margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
   .badges{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 18px}
-  .badge{font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:999px;background:var(--carrot-soft);color:var(--carrot-dark)}
-  section{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin:12px 0;
-    box-shadow:0 1px 3px rgba(0,0,0,.03)}
-  h2{font-size:16px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px}
-  table{width:100%;border-collapse:collapse;font-size:13.5px}
-  th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line)}
-  th:first-child,td:first-child{text-align:left}
-  th{color:var(--mut);font-weight:700;font-size:12.5px}
-  tbody tr:last-child td{border-bottom:none}
+  .section h2{display:flex;align-items:center;gap:8px;margin-bottom:14px}
   .sched,.kv{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;font-size:13.5px}
-  .sched .k,.kv .k{color:var(--mut);font-weight:600}
+  .sched .k,.kv .k{color:var(--muted);font-weight:600}
   .spec{font-size:12px;font-weight:700;color:var(--ok)}
-  .note{color:var(--mut);font-size:13px;margin:0 0 10px}
-  a.src{display:inline-flex;align-items:center;gap:6px;background:var(--carrot);color:#fff;text-decoration:none;
-    font-weight:700;font-size:14px;padding:11px 18px;border-radius:12px}
-  a.src:hover{background:var(--carrot-dark)}
-  .muted{color:var(--mut)}
-  pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--sub);margin:0}
+  .note{color:var(--muted);font-size:13px;margin:0 0 10px}
+  pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--body);margin:0}
   .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
-  .imgs a{display:block;text-decoration:none;color:var(--sub);font-size:12.5px;font-weight:600;text-align:center}
-  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#EDEEEF;margin-bottom:5px}
-  .imgs a:hover img{border-color:var(--carrot)}
+  .imgs a{display:block;text-decoration:none;color:var(--body);font-size:12.5px;font-weight:600;text-align:center}
+  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--hairline);background:var(--surface-strong);margin-bottom:5px}
+  .imgs a:hover img{border-color:var(--accent-teal)}
   .srcs{display:flex;flex-wrap:wrap;gap:8px}
+  #map{width:100%;height:300px;border-radius:var(--r-md);margin-bottom:14px;background:var(--surface-strong)}
   #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;
     display:flex;align-items:center;justify-content:center}
   #lightbox[hidden]{display:none}
-  #lightbox img{max-width:92vw;max-height:82vh;border-radius:8px;object-fit:contain}
+  #lightbox img{max-width:92vw;max-height:82vh;border-radius:var(--r-sm);object-fit:contain}
   .lb-btn{position:absolute;background:rgba(255,255,255,.12);color:#fff;border:none;cursor:pointer;
-    font-size:26px;line-height:1;padding:12px 16px;border-radius:12px;font-family:inherit}
+    font-size:26px;line-height:1;padding:12px 16px;border-radius:var(--r-md);font-family:inherit}
   .lb-btn:hover{background:rgba(255,255,255,.25)}
   .lb-close{top:16px;right:16px}
   .lb-prev{left:12px;top:50%;transform:translateY(-50%)}
   .lb-next{right:12px;top:50%;transform:translateY(-50%)}
   .lb-caption{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
-    color:#fff;font-size:14px;font-weight:600;background:rgba(0,0,0,.45);padding:7px 16px;border-radius:999px;white-space:nowrap}
-  a.src.alt{background:#fff;color:var(--carrot);border:1.5px solid var(--carrot)}
-  a.src.alt:hover{background:var(--carrot-soft)}
+    color:#fff;font-size:14px;font-weight:600;background:rgba(0,0,0,.45);padding:7px 16px;border-radius:var(--r-pill);white-space:nowrap}
 </style>
-</head>
-<body>
-  <div class="topbar"><div class="inner"><a href="/">← 목록으로</a></div></div>
-  <div class="wrap">
-    <h1>{{ notice.house_nm }}</h1>
-    <div class="meta">
-      <span class="area-tag">{{ notice.area_nm or '-' }}</span>
-      <span>{{ notice.house_secd_nm or '' }} {{ notice.house_dtl_secd_nm or '' }}</span>
-      <span>총 {{ notice.tot_suply_hshldco or '-' }}세대</span>
-      {% if mvn %}<span>입주예정 {{ mvn[:4] }}.{{ mvn[4:6] }}</span>{% endif %}
-    </div>
+{% endblock %}
 
-    {% if regs %}
-    <div class="badges">{% for r in regs %}<span class="badge">{{ r }}</span>{% endfor %}</div>
-    {% endif %}
+{% block topbar %}
+<header class="topbar"><div class="inner">
+  <a href="/"><svg class="ic"><use href="#i-arrow-left"></use></svg> 목록으로</a>
+</div></header>
+{% endblock %}
 
-    {% if superseded_by %}
-    <section style="border-color:var(--carrot)">
-      <b>⚠️ 정정공고로 대체된 공고입니다.</b>
-      <a href="/notice/{{ superseded_by }}">최신 정정공고 보기 →</a>
-    </section>
-    {% endif %}
-
-    {% if judged %}
-    <section>
-      <h2>🎯 내 청약 판정</h2>
-      {% if judged.supported %}
-      <div class="sched">
-        <div class="k">가점</div>
-        <div><b>{{ judged.score.total }}점</b> <span class="muted">(무주택 {{ judged.score.homeless }} · 부양가족 {{ judged.score.dependents }} · 통장 {{ judged.score.account }})</span></div>
-        <div class="k">순위</div>
-        <div><b>{{ judged.rank.rank }}</b>{% if judged.rank.regulated %} <span class="muted">· 규제지역</span>{% endif %}
-          {% if judged.rank.reasons %}<span class="muted"> — {{ judged.rank.reasons|join(', ') }}</span>{% endif %}</div>
-        <div class="k">신혼부부 특공</div>
-        <div>{% if judged.newlywed.tier %}<b>{{ judged.newlywed.tier }}</b>{% else %}해당 없음{% endif %}
-          <span class="muted">— {{ judged.newlywed.reasons|join(', ') }}</span></div>
-        <div class="k">생애최초 특공</div>
-        <div>{% if judged.first_life.tier %}<b>{{ judged.first_life.tier }}</b>{% else %}해당 없음{% endif %}
-          <span class="muted">— {{ judged.first_life.reasons|join(', ') }}</span></div>
-      </div>
-      <p class="muted" style="margin:10px 0 0;font-size:12px">※ config/profile.yaml 기반 자동 판정 — 최종 자격은 모집공고문 기준으로 확인하세요.</p>
-      {% else %}
-      <p class="muted">{{ judged.reason }}</p>
-      {% endif %}
-    </section>
-    {% endif %}
-
-    {% if schedule %}
-    <section>
-      <h2>📅 일정</h2>
-      <div class="sched">
-        {% for label, val in schedule %}<div class="k">{{ label }}</div><div>{{ val }}</div>{% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
-    {% if lh_schedule %}
-    <section>
-      <h2>📅 공급구분별 일정</h2>
-      <table>
-        <thead><tr><th>구분</th><th>신청일시</th><th>당첨발표</th><th>서류제출</th><th>계약</th></tr></thead>
-        <tbody>
-          {% for r in lh_schedule %}
-          <tr><td>{{ r.gubun or '-' }}</td><td>{{ r.acp or '-' }}</td><td>{{ r.anc or '-' }}</td><td>{{ r.sbm or '-' }}</td><td>{{ r.ctrt or '-' }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-    {% endif %}
-
-    {% if rows %}
-    <section>
-      <h2>🏘 주택형별 모집</h2>
-      <table>
-        <thead><tr><th>주택형</th><th>면적(㎡)</th><th>분양가(만원)</th><th>일반</th><th>특별공급</th></tr></thead>
-        <tbody>
-          {% for row in rows %}
-          {% set ht = row.ht %}
-          <tr>
-            <td>{{ ht.house_ty }}</td>
-            <td>{{ '%.2f'|format(ht.suply_ar) if ht.suply_ar else '-' }}</td>
-            <td>{{ '{:,}'.format(ht.lttot_top_amount) if ht.lttot_top_amount else '공고문' }}</td>
-            <td>{{ ht.suply_hshldco if ht.suply_hshldco is not none else '-' }}</td>
-            <td>{% if row.specials %}{% for label, cnt in row.specials %}<span class="spec">{{ label }} {{ cnt }}</span>{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="muted">-</span>{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-    {% endif %}
-
-    {% if lh_images %}
-    <section>
-      <h2>🖼 단지 이미지</h2>
-      <div class="imgs" id="gallery">
-        {% for im in lh_images %}
-        <a href="{{ im.url }}" target="_blank" rel="noopener" data-label="{{ im.label or im.name }}">
-          <img src="{{ im.url }}" alt="{{ im.label or im.name }}" loading="lazy"
-               onerror="this.closest('a').style.display='none'">
-          <span>{{ im.label or im.name }}</span>
-        </a>
-        {% endfor %}
-      </div>
-    </section>
-
-    <div id="lightbox" hidden>
-      <button class="lb-btn lb-close" aria-label="닫기">✕</button>
-      <button class="lb-btn lb-prev" aria-label="이전">‹</button>
-      <img src="" alt="">
-      <button class="lb-btn lb-next" aria-label="다음">›</button>
-      <div class="lb-caption"></div>
-    </div>
-    <script>
-    // 갤러리 라이트박스: 팝업에서 좌우 넘김(버튼·방향키·배경클릭 닫기·ESC)
-    (function () {
-      var lb = document.getElementById('lightbox');
-      var lbImg = lb.querySelector('img');
-      var lbCap = lb.querySelector('.lb-caption');
-      var idx = 0, items = [];
-
-      function visibleItems() {
-        return Array.prototype.slice.call(
-          document.querySelectorAll('#gallery a')
-        ).filter(function (a) { return a.style.display !== 'none'; });
-      }
-      function show(i) {
-        idx = (i + items.length) % items.length;
-        var a = items[idx];
-        lbImg.src = a.href;
-        lbCap.textContent = a.dataset.label + ' · ' + (idx + 1) + ' / ' + items.length;
-      }
-      function open(i) { items = visibleItems(); if (!items.length) return; lb.hidden = false; show(i); }
-      function close() { lb.hidden = true; lbImg.src = ''; }
-
-      document.getElementById('gallery').addEventListener('click', function (e) {
-        var a = e.target.closest('a');
-        if (!a) return;
-        e.preventDefault();  // 새 탭 대신 팝업(라이트박스)
-        open(visibleItems().indexOf(a));
-      });
-      lb.querySelector('.lb-close').addEventListener('click', close);
-      lb.querySelector('.lb-prev').addEventListener('click', function () { show(idx - 1); });
-      lb.querySelector('.lb-next').addEventListener('click', function () { show(idx + 1); });
-      lb.addEventListener('click', function (e) { if (e.target === lb) close(); });
-      document.addEventListener('keydown', function (e) {
-        if (lb.hidden) return;
-        if (e.key === 'Escape') close();
-        else if (e.key === 'ArrowLeft') show(idx - 1);
-        else if (e.key === 'ArrowRight') show(idx + 1);
-      });
-    })();
-    </script>
-    {% endif %}
-
-    <section>
-      <h2>📍 위치 · 문의</h2>
-      {% if adres and kakao_key %}
-      <div id="map" style="width:100%;height:300px;border-radius:12px;margin-bottom:14px;background:#EDEEEF"></div>
-      {% endif %}
-      <div class="kv">
-        {% if adres %}<div class="k">주소</div><div>{{ adres }}</div>{% endif %}
-        {% if builder %}<div class="k">시공사</div><div>{{ builder }}</div>{% endif %}
-        {% if notice.bsns_mby_nm %}<div class="k">시행</div><div>{{ notice.bsns_mby_nm }}</div>{% endif %}
-        {% if tel %}<div class="k">문의</div><div>{{ tel }}</div>{% endif %}
-      </div>
-    </section>
-
-    {% if pan_dtl %}
-    <section>
-      <h2>📄 공고 내용</h2>
-      <pre class="cts">{{ pan_dtl }}</pre>
-    </section>
-    {% endif %}
-
-    <section>
-      <h2>📋 자격요건 · 상세</h2>
-      <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요. 평면도(도면)는 공고문 PDF에 포함되어 있어요.</p>
-      <div class="srcs">
-        {% if notice.pblanc_url %}<a class="src" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener">📄 원본 공고문(홈페이지) 열기</a>{% endif %}
-        {% for f in lh_files %}
-        <a class="src alt" href="{{ f.url }}" target="_blank" rel="noopener">📎 {{ f.label or f.name or '공고문(PDF)' }}</a>
-        {% endfor %}
-      </div>
-    </section>
+{% block content %}
+  <h1>{{ notice.house_nm }}</h1>
+  <div class="meta">
+    <span class="tag">{{ notice.area_nm or '-' }}</span>
+    <span>{{ notice.house_secd_nm or '' }} {{ notice.house_dtl_secd_nm or '' }}</span>
+    <span>총 {{ notice.tot_suply_hshldco or '-' }}세대</span>
+    {% if mvn %}<span>입주예정 {{ mvn[:4] }}.{{ mvn[4:6] }}</span>{% endif %}
   </div>
 
-  {% if adres and kakao_key %}
-  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services" onerror="mapLoadFailed()"></script>
-  <script>
-    // 카카오 지도 로드 실패 안내 — sdk.js 자체 실패(onerror) + 지도 엔진(t1.daumcdn.net)
-    // 타임아웃/부분 로드까지 커버한다. (사례: CDN 지연으로 LatLng is not a constructor)
-    function mapLoadFailed() {
-      var el = document.getElementById('map');
-      if (!el || el.dataset.ready === '1') return;
-      el.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--mut);font-size:13.5px">' +
-        '<span style="font-size:28px">🗺️</span>' +
-        '<b style="color:var(--sub)">지도를 불러오지 못했어요</b>' +
-        '<span>카카오 지도 서버 연결이 원활하지 않아요. 잠시 후 새로고침 해주세요.</span>' +
-        '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:10px;cursor:pointer">새로고침</button>' +
-        '</div>';
+  {% if regs %}
+  <div class="badges">{% for r in regs %}<span class="badge badge--pre">{{ r }}</span>{% endfor %}</div>
+  {% endif %}
+
+  {% if superseded_by %}
+  <section class="section" style="border-color:var(--accent-teal)">
+    <b><svg class="ic"><use href="#i-alert"></use></svg> 정정공고로 대체된 공고입니다.</b>
+    <a href="/notice/{{ superseded_by }}">최신 정정공고 보기 <svg class="ic"><use href="#i-arrow-right"></use></svg></a>
+  </section>
+  {% endif %}
+
+  {% if judged %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-target"></use></svg> 내 청약 판정</h2>
+    {% if judged.supported %}
+    <div class="sched">
+      <div class="k">가점</div>
+      <div><b>{{ judged.score.total }}점</b> <span class="muted">(무주택 {{ judged.score.homeless }} · 부양가족 {{ judged.score.dependents }} · 통장 {{ judged.score.account }})</span></div>
+      <div class="k">순위</div>
+      <div><b>{{ judged.rank.rank }}</b>{% if judged.rank.regulated %} <span class="muted">· 규제지역</span>{% endif %}
+        {% if judged.rank.reasons %}<span class="muted"> — {{ judged.rank.reasons|join(', ') }}</span>{% endif %}</div>
+      <div class="k">신혼부부 특공</div>
+      <div>{% if judged.newlywed.tier %}<b>{{ judged.newlywed.tier }}</b>{% else %}해당 없음{% endif %}
+        <span class="muted">— {{ judged.newlywed.reasons|join(', ') }}</span></div>
+      <div class="k">생애최초 특공</div>
+      <div>{% if judged.first_life.tier %}<b>{{ judged.first_life.tier }}</b>{% else %}해당 없음{% endif %}
+        <span class="muted">— {{ judged.first_life.reasons|join(', ') }}</span></div>
+    </div>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">※ config/profile.yaml 기반 자동 판정 — 최종 자격은 모집공고문 기준으로 확인하세요.</p>
+    {% else %}
+    <p class="muted">{{ judged.reason }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if schedule %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-calendar"></use></svg> 일정</h2>
+    <div class="sched">
+      {% for label, val in schedule %}<div class="k">{{ label }}</div><div>{{ val }}</div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if lh_schedule %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-calendar"></use></svg> 공급구분별 일정</h2>
+    <table class="table">
+      <thead><tr><th>구분</th><th>신청일시</th><th>당첨발표</th><th>서류제출</th><th>계약</th></tr></thead>
+      <tbody>
+        {% for r in lh_schedule %}
+        <tr><td>{{ r.gubun or '-' }}</td><td>{{ r.acp or '-' }}</td><td>{{ r.anc or '-' }}</td><td>{{ r.sbm or '-' }}</td><td>{{ r.ctrt or '-' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if rows %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-home"></use></svg> 주택형별 모집</h2>
+    <table class="table">
+      <thead><tr><th>주택형</th><th>면적(㎡)</th><th>분양가(만원)</th><th>일반</th><th>특별공급</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        {% set ht = row.ht %}
+        <tr>
+          <td>{{ ht.house_ty }}</td>
+          <td>{{ '%.2f'|format(ht.suply_ar) if ht.suply_ar else '-' }}</td>
+          <td>{{ '{:,}'.format(ht.lttot_top_amount) if ht.lttot_top_amount else '공고문' }}</td>
+          <td>{{ ht.suply_hshldco if ht.suply_hshldco is not none else '-' }}</td>
+          <td>{% if row.specials %}{% for label, cnt in row.specials %}<span class="spec">{{ label }} {{ cnt }}</span>{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="muted">-</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if lh_images %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-image"></use></svg> 단지 이미지</h2>
+    <div class="imgs" id="gallery">
+      {% for im in lh_images %}
+      <a href="{{ im.url }}" target="_blank" rel="noopener" data-label="{{ im.label or im.name }}">
+        <img src="{{ im.url }}" alt="{{ im.label or im.name }}" loading="lazy"
+             onerror="this.closest('a').style.display='none'">
+        <span>{{ im.label or im.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div id="lightbox" hidden>
+    <button class="lb-btn lb-close" aria-label="닫기">✕</button>
+    <button class="lb-btn lb-prev" aria-label="이전">‹</button>
+    <img src="" alt="">
+    <button class="lb-btn lb-next" aria-label="다음">›</button>
+    <div class="lb-caption"></div>
+  </div>
+  {% endif %}
+
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-pin"></use></svg> 위치 · 문의</h2>
+    {% if adres and kakao_key %}
+    <div id="map"></div>
+    {% endif %}
+    <div class="kv">
+      {% if adres %}<div class="k">주소</div><div>{{ adres }}</div>{% endif %}
+      {% if builder %}<div class="k">시공사</div><div>{{ builder }}</div>{% endif %}
+      {% if notice.bsns_mby_nm %}<div class="k">시행</div><div>{{ notice.bsns_mby_nm }}</div>{% endif %}
+      {% if tel %}<div class="k">문의</div><div>{{ tel }}</div>{% endif %}
+    </div>
+  </section>
+
+  {% if pan_dtl %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-doc"></use></svg> 공고 내용</h2>
+    <pre class="cts">{{ pan_dtl }}</pre>
+  </section>
+  {% endif %}
+
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-doc"></use></svg> 자격요건 · 상세</h2>
+    <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요. 평면도(도면)는 공고문 PDF에 포함되어 있어요.</p>
+    <div class="srcs">
+      {% if notice.pblanc_url %}<a class="btn btn-primary" href="{{ notice.pblanc_url }}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-doc"></use></svg> 원본 공고문(홈페이지) 열기</a>{% endif %}
+      {% for f in lh_files %}
+      <a class="btn btn-secondary" href="{{ f.url }}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-clip"></use></svg> {{ f.label or f.name or '공고문(PDF)' }}</a>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+{% if lh_images %}
+<script>
+// 갤러리 라이트박스: 팝업에서 좌우 넘김(버튼·방향키·배경클릭 닫기·ESC)
+(function () {
+  var lb = document.getElementById('lightbox');
+  var lbImg = lb.querySelector('img');
+  var lbCap = lb.querySelector('.lb-caption');
+  var idx = 0, items = [];
+
+  function visibleItems() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('#gallery a')
+    ).filter(function (a) { return a.style.display !== 'none'; });
+  }
+  function show(i) {
+    idx = (i + items.length) % items.length;
+    var a = items[idx];
+    lbImg.src = a.href;
+    lbCap.textContent = a.dataset.label + ' · ' + (idx + 1) + ' / ' + items.length;
+  }
+  function open(i) { items = visibleItems(); if (!items.length) return; lb.hidden = false; show(i); }
+  function close() { lb.hidden = true; lbImg.src = ''; }
+
+  document.getElementById('gallery').addEventListener('click', function (e) {
+    var a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();  // 새 탭 대신 팝업(라이트박스)
+    open(visibleItems().indexOf(a));
+  });
+  lb.querySelector('.lb-close').addEventListener('click', close);
+  lb.querySelector('.lb-prev').addEventListener('click', function () { show(idx - 1); });
+  lb.querySelector('.lb-next').addEventListener('click', function () { show(idx + 1); });
+  lb.addEventListener('click', function (e) { if (e.target === lb) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (lb.hidden) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') show(idx - 1);
+    else if (e.key === 'ArrowRight') show(idx + 1);
+  });
+})();
+</script>
+{% endif %}
+
+{% if adres and kakao_key %}
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services" onerror="mapLoadFailed()"></script>
+<script>
+  // 카카오 지도 로드 실패 안내 — sdk.js 자체 실패(onerror) + 지도 엔진(t1.daumcdn.net)
+  // 타임아웃/부분 로드까지 커버한다. (사례: CDN 지연으로 LatLng is not a constructor)
+  function mapLoadFailed() {
+    var el = document.getElementById('map');
+    if (!el || el.dataset.ready === '1') return;
+    el.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:13.5px">' +
+      '<svg class="ic" style="width:28px;height:28px"><use href="#i-map"></use></svg>' +
+      '<b style="color:var(--body)">지도를 불러오지 못했어요</b>' +
+      '<span>카카오 지도 서버 연결이 원활하지 않아요. 잠시 후 새로고침 해주세요.</span>' +
+      '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--hairline);background:#fff;color:var(--body);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:10px;cursor:pointer">새로고침</button>' +
+      '</div>';
+  }
+
+  (function () {
+    if (!(window.kakao && kakao.maps && kakao.maps.load)) { mapLoadFailed(); return; }
+    var failTimer = setTimeout(mapLoadFailed, 12000); // 엔진 로드가 끝내 안 오는 경우
+    kakao.maps.load(function () {
+    clearTimeout(failTimer);
+    // 엔진 스크립트가 부분 실패하면 load 콜백이 와도 생성자가 비어 있다
+    if (!(kakao.maps.LatLng && kakao.maps.Map && kakao.maps.services)) { mapLoadFailed(); return; }
+    try {
+    document.getElementById('map').dataset.ready = '1';
+    var map = new kakao.maps.Map(document.getElementById('map'), {
+      center: new kakao.maps.LatLng(37.5665, 126.978), level: 5
+    });
+    var geocoder = new kakao.maps.services.Geocoder();
+    var full = {{ adres | tojson }};
+    var polygonCoords = {{ polygon | tojson }};  // [[lng,lat], ...] 또는 null
+    // 신규 택지 주소("~동 양주신도시 회천지구 A8블록")는 지오코딩이 실패하므로
+    // 전체 → 앞 4단어 → 3단어(시도+시군구+동) → 2단어 순으로 좁혀가며 시도한다.
+    var candidates = (function () {
+      var parts = full.replace(/\(.*?\)/g, ' ').split(/\s+/).filter(Boolean);
+      var list = [full];
+      for (var k = Math.min(4, parts.length); k >= 2; k--) {
+        var cand = parts.slice(0, k).join(' ');
+        if (list.indexOf(cand) === -1) list.push(cand);
+      }
+      return list;
+    })();
+
+    // 필지 폴리곤(있으면) 그리기 + 그 영역으로 지도 맞춤
+    if (polygonCoords && polygonCoords.length) {
+      var path = polygonCoords.map(function (c) { return new kakao.maps.LatLng(c[1], c[0]); });
+      new kakao.maps.Polygon({
+        map: map, path: path, strokeWeight: 2, strokeColor: '#1a3a3a',
+        strokeOpacity: 0.9, fillColor: '#1a3a3a', fillOpacity: 0.25
+      });
+      var bounds = new kakao.maps.LatLngBounds();
+      path.forEach(function (p) { bounds.extend(p); });
+      map.setBounds(bounds);
     }
 
-    (function () {
-      if (!(window.kakao && kakao.maps && kakao.maps.load)) { mapLoadFailed(); return; }
-      var failTimer = setTimeout(mapLoadFailed, 12000); // 엔진 로드가 끝내 안 오는 경우
-      kakao.maps.load(function () {
-      clearTimeout(failTimer);
-      // 엔진 스크립트가 부분 실패하면 load 콜백이 와도 생성자가 비어 있다
-      if (!(kakao.maps.LatLng && kakao.maps.Map && kakao.maps.services)) { mapLoadFailed(); return; }
-      try {
-      document.getElementById('map').dataset.ready = '1';
-      var map = new kakao.maps.Map(document.getElementById('map'), {
-        center: new kakao.maps.LatLng(37.5665, 126.978), level: 5
+    function place(result, approx) {
+      var pos = new kakao.maps.LatLng(result[0].y, result[0].x);
+      new kakao.maps.Marker({ map: map, position: pos });
+      if (!(polygonCoords && polygonCoords.length)) {
+        map.setCenter(pos);
+        map.setLevel(approx ? 6 : 4);  // 동 단위 대략 위치면 넓게
+      }
+      if (approx) {
+        var note = document.createElement('div');
+        note.textContent = '※ 신규 택지라 정확한 지점을 찾지 못해 동 단위 대략 위치예요.';
+        note.style.cssText = 'color:var(--muted);font-size:12px;margin:-8px 0 14px';
+        document.getElementById('map').insertAdjacentElement('afterend', note);
+      }
+    }
+    function mapNoLocation() {
+      if (polygonCoords && polygonCoords.length) return;  // 폴리곤으로 이미 표시됨
+      var el = document.getElementById('map');
+      el.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;color:var(--muted);font-size:13.5px">' +
+        '<svg class="ic" style="width:26px;height:26px"><use href="#i-pin"></use></svg>' +
+        '<b style="color:var(--body)">지도에서 위치를 찾지 못했어요</b>' +
+        '<span>신규 택지 주소라 좌표 검색이 안 돼요 — 아래 주소를 참고해주세요.</span>' +
+        '</div>';
+    }
+    (function tryGeocode(i) {
+      if (i >= candidates.length) { mapNoLocation(); return; }
+      geocoder.addressSearch(candidates[i], function (r, s) {
+        if (s === kakao.maps.services.Status.OK) { place(r, i > 0); return; }
+        tryGeocode(i + 1);
       });
-      var geocoder = new kakao.maps.services.Geocoder();
-      var full = {{ adres | tojson }};
-      var polygonCoords = {{ polygon | tojson }};  // [[lng,lat], ...] 또는 null
-      // 신규 택지 주소("~동 양주신도시 회천지구 A8블록")는 지오코딩이 실패하므로
-      // 전체 → 앞 4단어 → 3단어(시도+시군구+동) → 2단어 순으로 좁혀가며 시도한다.
-      var candidates = (function () {
-        var parts = full.replace(/\(.*?\)/g, ' ').split(/\s+/).filter(Boolean);
-        var list = [full];
-        for (var k = Math.min(4, parts.length); k >= 2; k--) {
-          var cand = parts.slice(0, k).join(' ');
-          if (list.indexOf(cand) === -1) list.push(cand);
-        }
-        return list;
-      })();
-
-      // 필지 폴리곤(있으면) 그리기 + 그 영역으로 지도 맞춤
-      if (polygonCoords && polygonCoords.length) {
-        var path = polygonCoords.map(function (c) { return new kakao.maps.LatLng(c[1], c[0]); });
-        new kakao.maps.Polygon({
-          map: map, path: path, strokeWeight: 2, strokeColor: '#FF6F0F',
-          strokeOpacity: 0.9, fillColor: '#FF6F0F', fillOpacity: 0.25
-        });
-        var bounds = new kakao.maps.LatLngBounds();
-        path.forEach(function (p) { bounds.extend(p); });
-        map.setBounds(bounds);
-      }
-
-      function place(result, approx) {
-        var pos = new kakao.maps.LatLng(result[0].y, result[0].x);
-        new kakao.maps.Marker({ map: map, position: pos });
-        if (!(polygonCoords && polygonCoords.length)) {
-          map.setCenter(pos);
-          map.setLevel(approx ? 6 : 4);  // 동 단위 대략 위치면 넓게
-        }
-        if (approx) {
-          var note = document.createElement('div');
-          note.textContent = '※ 신규 택지라 정확한 지점을 찾지 못해 동 단위 대략 위치예요.';
-          note.style.cssText = 'color:var(--mut);font-size:12px;margin:-8px 0 14px';
-          document.getElementById('map').insertAdjacentElement('afterend', note);
-        }
-      }
-      function mapNoLocation() {
-        if (polygonCoords && polygonCoords.length) return;  // 폴리곤으로 이미 표시됨
-        var el = document.getElementById('map');
-        el.innerHTML =
-          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;color:var(--mut);font-size:13.5px">' +
-          '<span style="font-size:26px">📍</span>' +
-          '<b style="color:var(--sub)">지도에서 위치를 찾지 못했어요</b>' +
-          '<span>신규 택지 주소라 좌표 검색이 안 돼요 — 아래 주소를 참고해주세요.</span>' +
-          '</div>';
-      }
-      (function tryGeocode(i) {
-        if (i >= candidates.length) { mapNoLocation(); return; }
-        geocoder.addressSearch(candidates[i], function (r, s) {
-          if (s === kakao.maps.services.Status.OK) { place(r, i > 0); return; }
-          tryGeocode(i + 1);
-        });
-      })(0);
-      } catch (e) { document.getElementById('map').dataset.ready = ''; mapLoadFailed(); }
-      });
-    })();
-  </script>
-  {% endif %}
-</body>
-</html>
+    })(0);
+    } catch (e) { document.getElementById('map').dataset.ready = ''; mapLoadFailed(); }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}
