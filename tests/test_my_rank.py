@@ -132,4 +132,5 @@ def test_index_rank_chip_and_badge(session):
     r = TestClient(app).get("/")
     assert 'data-ftype="rank"' in r.text
     assert 'data-rank="1순위"' in r.text
-    assert "🏅 1순위" in r.text
+    # 디자인 개편으로 이모지(🏅) 제거 — 순위 배지는 텍스트만 렌더한다
+    assert 'class="rank rank-1">1순위' in r.text
