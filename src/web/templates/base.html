@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}청약 알리미{% endblock %}</title>
+<style>
+  :root{
+    /* 색상 */
+    --canvas:#fffaf0; --surface-soft:#faf5e8; --surface-card:#f5f0e0; --surface-strong:#ebe6d6;
+    --ink:#0a0a0a; --body-strong:#1a1a1a; --body:#3a3a3a; --muted:#6a6a6a; --muted-soft:#9a9a9a;
+    --hairline:#e5e5e5; --hairline-soft:#f0f0f0;
+    --primary:#0a0a0a; --primary-active:#1f1f1f; --primary-disabled:#e5e5e5; --on-primary:#ffffff;
+    --accent-teal:#1a3a3a; --on-teal:#ffffff; --accent-peach:#ffb084; --accent-peach-soft:#fff1e6;
+    --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+    /* 라운드 */
+    --r-xs:6px; --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:24px; --r-pill:9999px;
+    /* 간격 */
+    --s-xxs:4px; --s-xs:8px; --s-sm:12px; --s-md:16px; --s-lg:24px; --s-xl:32px; --s-xxl:48px; --s-section:96px;
+    /* 폰트 */
+    --font-sans: -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",Pretendard,sans-serif;
+  }
+
+  /* 타이포 트리트먼트 */
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-sans);color:var(--body);background:var(--canvas);
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.03em;color:var(--ink);line-height:1.15;margin:0}
+  h2{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin:0}
+  .display{font-size:40px;font-weight:700;letter-spacing:-.03em}
+  b,strong{color:var(--body-strong);font-weight:700}
+  .muted{color:var(--muted)}
+  .sub{color:var(--muted);font-size:13.5px}
+
+  /* 상단바 · 브랜드 */
+  .topbar{background:var(--canvas);border-bottom:1px solid var(--hairline);color:var(--ink)}
+  .topbar .inner{max-width:840px;margin:0 auto;padding:16px 20px}
+  .topbar a{color:var(--ink);text-decoration:none}
+  .brand{color:var(--ink);font-weight:800;letter-spacing:-.02em;font-size:18px}
+
+  /* 컨테이너 */
+  .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
+
+  /* 버튼 */
+  .btn{border-radius:var(--r-md);height:44px;padding:12px 20px;font-weight:700;font-size:14px;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
+    border:none;font-family:inherit;text-decoration:none}
+  .btn-primary{background:var(--primary);color:var(--on-primary)}
+  .btn-primary:hover{background:var(--primary-active)}
+  .btn-secondary{background:var(--canvas);color:var(--ink);border:1px solid var(--hairline)}
+  .btn-secondary:hover{border-color:var(--ink)}
+
+  /* 카드 · 섹션 (그림자 없음/옅게, transform 금지) */
+  .card{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0}
+  .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .section{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0}
+
+  /* 뱃지 (D-day 변형) */
+  .badge{display:inline-block;font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill);white-space:nowrap}
+  .badge--soon{background:var(--danger);color:#fff}
+  .badge--mid{background:var(--warn);color:#fff}
+  .badge--far{color:var(--ok);background:#E6F6EE}
+  .badge--pre{color:var(--accent-teal);background:#e7efee}
+
+  /* 지역 태그 */
+  .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--accent-teal);background:#e7efee;
+    padding:3px 10px;border-radius:var(--r-pill)}
+
+  /* 순위 태그 (1순위=teal 채움=최우선, 2순위=약한 teal) */
+  .rank{display:inline-block;border-radius:var(--r-pill);font-weight:800;font-size:12px;padding:3px 10px}
+  .rank-1{color:var(--on-teal);background:var(--accent-teal)}
+  .rank-2{color:var(--accent-teal);background:#e7efee}
+
+  /* 필터 칩 */
+  .chip{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-pill);padding:7px 14px;
+    font-size:13px;font-weight:600;color:var(--body);font-family:inherit}
+  button.chip{cursor:pointer}
+  button.chip:hover{border-color:var(--ink);color:var(--ink)}
+  button.chip.active{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+
+  /* 테이블 */
+  .table{width:100%;border-collapse:collapse}
+  .table th,.table td{padding:9px 8px;border-bottom:1px solid var(--hairline);text-align:right}
+  .table th:first-child,.table td:first-child{text-align:left}
+  .table th{color:var(--muted);font-size:12.5px;font-weight:700}
+
+  /* 폼 */
+  label{display:block;font-size:13px;font-weight:700;color:var(--body);margin:0 0 6px}
+  input{width:100%;padding:13px 14px;border:1px solid var(--hairline);border-radius:var(--r-md);
+    font-size:15px;background:var(--canvas);color:var(--ink);outline:none;font-family:inherit}
+  input:focus{border-color:var(--ink)}
+  input.invalid{border-color:var(--danger)}
+  .field{margin-bottom:16px}
+  .field-error{display:none;color:var(--danger);font-size:12.5px;font-weight:600;margin-top:6px}
+  .field.has-error .field-error{display:block}
+  .form-error{background:#FDECEC;color:var(--danger);border-radius:var(--r-md);padding:11px 13px;
+    font-size:13.5px;font-weight:600;margin-bottom:16px}
+
+  /* 크림 푸터 (다크 아님) */
+  .footer{background:var(--surface-soft);color:var(--body);border-top:1px solid var(--hairline-soft);
+    padding:40px 20px;text-align:center;font-size:12px}
+
+  /* 빈 상태 */
+  .empty{text-align:center;color:var(--muted);padding:64px 0}
+
+  /* SVG 아이콘 헬퍼 */
+  .ic{width:1em;height:1em;vertical-align:-0.15em;stroke:currentColor;fill:none;flex-shrink:0}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+  <!-- 라인 아이콘 스프라이트: viewBox 0 0 24 24, stroke currentColor 1.8, round cap/join. 사용: <svg class="ic"><use href="#i-pin"></use></svg> -->
+  <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></symbol>
+    <symbol id="i-won" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6l3 12 4-10 4 10 3-12"/><path d="M3.5 10.5h17M3.5 14h17"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></symbol>
+    <symbol id="i-award" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M3 8h18v3H3zM12 8v13"/><path d="M12 8S10.5 4 8.5 4.8 8 8 12 8zM12 8s1.5-4 3.5-3.2S16 8 12 8z"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17"/><path d="M15 21V9h4a1 1 0 0 1 1 1v11M3 21h18"/><path d="M8 7h3M8 11h3M8 15h3"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7.5 8.5l2 2M11 5l2 2M4 12l2 2"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16a1 1 0 0 1-.9 1.5H3.9A1 1 0 0 1 3 19z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  </svg>
+
+  {% block topbar %}
+  <header class="topbar"><div class="inner"><a class="brand" href="/">청약 알리미</a></div></header>
+  {% endblock %}
+
+  <main class="wrap">{% block content %}{% endblock %}</main>
+
+  {% block footer %}{% endblock %}
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
