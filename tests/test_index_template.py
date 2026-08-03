@@ -194,7 +194,11 @@ def test_card_bookmark_button():
     assert 'class="bookmark-btn"' in off              # 미북마크 → is-on 없음
     assert 'data-pblanc="2026000123"' in off
     assert 'aria-pressed="false"' in off
-    assert 'href="#i-bookmark"' in off
+    # 버튼 아이콘은 CSS로 채울 수 있게 인라인 SVG(스프라이트 use 아님)
+    assert re.search(
+        r'class="bookmark-btn"[^>]*>\s*<svg class="ic" viewBox="0 0 24 24"', off
+    ), "북마크 버튼이 인라인 SVG(viewBox 포함)를 써야 함"
+    assert "M6 3h12" in off                           # 북마크 path
     on = _render([_item(bookmarked=True)])
     assert "bookmark-btn is-on" in on                 # 북마크됨 → is-on
     assert 'aria-pressed="true"' in on

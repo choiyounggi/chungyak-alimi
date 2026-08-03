@@ -18,11 +18,13 @@
         {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
         {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
       {% endif %}
+      {# 스프라이트 use는 symbol의 fill=none 때문에 CSS로 내부를 못 칠하므로, 채움 토글이 필요한
+         이 버튼만 인라인 SVG로 둔다(.bookmark-btn.is-on .ic{fill}가 적용됨). #}
       <button type="button" class="bookmark-btn{{ ' is-on' if it.bookmarked else '' }}"
               data-pblanc="{{ n.pblanc_no }}"
               aria-pressed="{{ 'true' if it.bookmarked else 'false' }}"
               aria-label="북마크" title="북마크">
-        <svg class="ic"><use href="#i-bookmark"></use></svg>
+        <svg class="ic" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
       </button>
     </div>
   </div>
