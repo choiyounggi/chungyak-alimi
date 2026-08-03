@@ -45,18 +45,20 @@
   .topnav .ic{width:16px;height:16px}
 
   /* 카드 내부 공용 레이아웃(대시보드·북마크 페이지 공유) */
-  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
   .head-actions{display:flex;align-items:center;gap:8px;flex:none}
   a.title{color:var(--ink);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4;flex:1 1 auto;min-width:0}
   a.title:hover{color:var(--accent-teal)}
   .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--body)}
   .row b{color:var(--body-strong);font-weight:700}
   .row .ic{color:var(--muted)}
-  /* 북마크 토글 버튼(카드 우상단) */
-  .bookmark-btn{border:none;background:none;cursor:pointer;color:var(--muted-soft);padding:4px;
-    border-radius:var(--r-sm);display:inline-flex;align-items:center;line-height:1;font-family:inherit}
+  /* 북마크 토글 버튼(카드 우측 상단에 항상 고정) */
+  .bookmark-btn{position:absolute;top:12px;right:12px;border:none;background:none;cursor:pointer;
+    color:var(--muted-soft);padding:4px;border-radius:var(--r-sm);display:inline-flex;align-items:center;
+    line-height:1;font-family:inherit}
   .bookmark-btn:hover{color:var(--accent-teal);background:var(--surface-soft)}
-  .bookmark-btn .ic{width:20px;height:20px}
+  .bookmark-btn .ic{width:22px;height:22px}
+  /* 체크(북마크됨) 시 테두리뿐 아니라 아이콘 내부 색을 채워 명확히 구분 */
   .bookmark-btn.is-on{color:var(--accent-teal)}
   .bookmark-btn.is-on .ic{fill:var(--accent-teal)}
 
@@ -73,7 +75,7 @@
   .btn-secondary:hover{border-color:var(--ink)}
 
   /* 카드 · 섹션 (그림자 없음/옅게, transform 금지) */
-  .card{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0}
+  .card{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0;position:relative}
   .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.05)}
   .section{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0}
   /* 섹션 제목과 내용 사이 구분선 */

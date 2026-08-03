@@ -127,6 +127,11 @@ def test_base_topnav_and_bookmark_toggle_js():
     assert "aria-pressed" in out
     # 북마크 페이지에서 해제 시 카드 제거
     assert "/bookmarks" in out and "removeChild" in out
+    # 북마크 버튼: 카드 우상단 고정(absolute) + 체크 시 아이콘 색 채움(fill)
+    assert ".bookmark-btn{position:absolute" in out
+    assert ".bookmark-btn.is-on .ic{fill:var(--accent-teal)}" in out
+    # 카드는 우상단 절대배치의 기준(position:relative)
+    assert "position:relative" in out
 
 
 # ── 정상: Jinja 블록 6개 이름 계약(정확히 이 이름) 존재 ──
