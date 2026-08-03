@@ -214,6 +214,9 @@ def test_no_map_without_kakao_key():
     assert 'class="card"' in out  # 리스트는 여전히 렌더
     # 칩 필터도 그대로
     assert 'data-ftype="area"' in out
+    # 지도 없을 땐 빈 상태 문구가 칩 필터 맥락(지도 범위 문구 아님)
+    assert "선택한 필터에 맞는 공고가 없어요" in out
+    assert "이 지도 범위에" not in out
 
 
 # ── 경계값: 좌표 None → data-lat/lng 빈 값으로 렌더, 예외 없음 ──
@@ -239,14 +242,35 @@ def test_map_js_present_with_kakao_key():
     # 좌표 없는 공고용 지오코딩 사다리 재사용
     assert "addressSearch" in out
     # 리스트↔지도 연동 + 필터-마커 동기화
-    assert "filterchange" in out
     assert "card--active" in out
     assert "panTo" in out                # 카드 hover/focus → 마커로 지도 이동
     assert "scrollIntoView" in out       # 마커 클릭 → 해당 카드로 스크롤
-    assert "setMap" in out               # 필터 변경 → 마커 표시/숨김 토글(재조회 없음)
+    assert "setMap" in out               # 칩 필터 → 마커 표시/숨김 토글
     # XSS 안전: 오버레이 DOM은 문자열 이어붙이기 대신 createElement/textContent
     assert "createElement" in out
     assert "textContent" in out
+
+
+# ── 지도 뷰포트가 곧 목록 필터: 초기 강남역 + 범위∩칩 필터 ──
+def test_map_viewport_drives_list():
+    out = _render([_item(lat=37.5, lng=127.03)], kakao_key="TESTKEY")
+    # 초기 디폴트 영역 = 강남역 (옛 서울시청 중심 제거)
+    assert "37.4979" in out and "127.0276" in out
+    assert "37.5665" not in out
+    # 뷰포트 기반 목록 필터: 현재 범위(getBounds) 안에 있는지(contain)로 판정
+    assert "getBounds" in out
+    assert ".contain(" in out
+    # 갱신은 사용자 조작(드래그/줌)에서만 → hover panTo로는 목록 안 흔들림
+    assert "dragend" in out
+    assert "zoom_changed" in out
+    # 칩 ∩ 뷰포트: 칩 예측자를 공유해 결합
+    assert "chungyakChipMatch" in out
+    assert "chungyakApplyList" in out
+    # 옛 filterchange 메커니즘은 제거됨
+    assert "filterchange" not in out
+    # 지도 있을 때 빈 상태 문구는 "지도 범위" 맥락
+    assert "이 지도 범위에 조건에 맞는 공고가 없어요" in out
+    assert "선택한 필터에 맞는 공고가 없어요" not in out
 
 
 # ── 경계값: kakao_key 없으면 지도 JS 미주입, 칩 필터 JS는 보존 ──

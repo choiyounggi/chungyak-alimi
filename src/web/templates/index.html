@@ -79,7 +79,8 @@
       <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
     {% endif %}
     <div class="empty" id="js-empty" style="display:none">
-      <svg class="ic"><use href="#i-search"></use></svg> 선택한 필터에 맞는 공고가 없어요.
+      <svg class="ic"><use href="#i-search"></use></svg>
+      {% if kakao_key %}이 지도 범위에 조건에 맞는 공고가 없어요. 지도를 이동하거나 축소해보세요.{% else %}선택한 필터에 맞는 공고가 없어요.{% endif %}
     </div>
 
     {% for it in items %}
@@ -168,18 +169,24 @@
     return true;
   }
 
-  function apply() {
+  // 카드 표시/카운트/빈상태를 한 곳에서 렌더. predicate(card) -> 보일지 여부.
+  function renderList(predicate) {
     var visible = 0;
     cards.forEach(function (c) {
-      var show = matches(c);
+      var show = predicate(c);
       c.style.display = show ? "" : "none";
       if (show) visible++;
     });
     if (countEl) countEl.textContent = visible;
     if (emptyEl) emptyEl.style.display = cards.length && !visible ? "" : "none";
-    // 지도 마커도 같이 토글하도록 알림(리스너 없으면 무해)
-    document.dispatchEvent(new CustomEvent("filterchange"));
   }
+
+  // 지도(map 스크립트)가 있으면 chungyakApplyList를 덮어써 "칩 ∩ 지도범위"로 필터링한다.
+  // 지도가 없으면(키 미설정) 칩 필터만 적용한다.
+  window.chungyakChipMatch = matches;
+  window.chungyakRenderList = renderList;
+  window.chungyakApplyList = function () { renderList(matches); };
+  function apply() { window.chungyakApplyList(); }
 
   chips.forEach(function (chip) {
     chip.addEventListener("click", function () {
@@ -230,18 +237,13 @@
       try {
         el.dataset.ready = "1";
         var map = new kakao.maps.Map(el, {
-          center: new kakao.maps.LatLng(37.5665, 126.978), level: 12
+          // 초기 디폴트 영역: 서울 강남역. 목록은 이 지도 범위에 든 공고만 보여준다.
+          center: new kakao.maps.LatLng(37.4979, 127.0276), level: 6
         });
         var geocoder = new kakao.maps.services.Geocoder();
         var cards = Array.prototype.slice.call(document.querySelectorAll(".list-panel .card"));
         var markers = {};                 // pblanc → Marker (한 번만 생성, 캐시)
-        var bounds = new kakao.maps.LatLngBounds();
-        var haveBounds = false;
         var activeMarker = null;
-
-        function fit() { if (haveBounds) map.setBounds(bounds); }
-
-        function hidden(card) { return card.style.display === "none"; }
 
         // 지오코딩 사다리(detail.html과 동일): 전체 → 앞4→3→2단어
         function candidatesOf(full) {
@@ -271,7 +273,9 @@
         function addMarker(card, lat, lng) {
           if (markers[card.dataset.pblanc]) return;   // 1회만
           var pos = new kakao.maps.LatLng(lat, lng);
-          var m = new kakao.maps.Marker({ map: hidden(card) ? null : map, position: pos });
+          // 칩 필터에 맞는 마커만 지도에 올린다(뷰포트는 마커를 숨기지 않고 화면 밖으로 둘 뿐).
+          var onMap = window.chungyakChipMatch(card) ? map : null;
+          var m = new kakao.maps.Marker({ map: onMap, position: pos });
           markers[card.dataset.pblanc] = m;
           // 인포윈도우 내용은 문자열 이어붙이기 없이 textContent로(신뢰 못하는 API 필드 XSS 방지)
           var box = document.createElement("div");
@@ -281,8 +285,6 @@
           kakao.maps.event.addListener(m, "click", function () {
             emphasize(m); iw.open(map, m); focusCard(card);
           });
-          bounds.extend(pos); haveBounds = true;
-          if (!hidden(card)) fit();
         }
 
         function focusFromCard(card) {
@@ -295,10 +297,11 @@
           if (!full) return;
           var cands = candidatesOf(full);
           (function tryGeocode(i) {
-            if (i >= cands.length) return;             // 못 찾으면 마커 없음(리스트엔 남음)
+            if (i >= cands.length) return;             // 못 찾으면 마커 없음 → 범위 목록에서 제외
             geocoder.addressSearch(cands[i], function (r, s) {
               if (s === kakao.maps.services.Status.OK) {
                 addMarker(card, parseFloat(r[0].y), parseFloat(r[0].x));
+                window.chungyakApplyList();            // 늦게 붙은 마커도 현재 범위면 목록에 반영
                 return;
               }
               tryGeocode(i + 1);
@@ -306,28 +309,33 @@
           })(0);
         }
 
+        // 목록 = 현재 지도 범위 안 마커 ∩ 칩 필터. (칩 스크립트의 chungyakApplyList를 덮어씀)
+        window.chungyakApplyList = function () {
+          var b = map.getBounds();
+          window.chungyakRenderList(function (card) {
+            var chip = window.chungyakChipMatch(card);
+            var m = markers[card.dataset.pblanc];
+            if (m) m.setMap(chip ? map : null);   // 칩 제외 마커는 지도에서 숨김
+            if (!chip) return false;              // 칩 불일치 → 목록 제외
+            if (!m) return false;                 // 좌표 없음(마커 없음) → 범위 밖으로 간주
+            return b.contain(m.getPosition());    // 현재 지도 범위 안에 있나
+          });
+        };
+
         cards.forEach(function (card) {
           var lat = parseFloat(card.dataset.lat), lng = parseFloat(card.dataset.lng);
           if (isFinite(lat) && isFinite(lng)) addMarker(card, lat, lng);
           else geocodeCard(card);
-          // 카드 hover/포커스(키보드) 시 해당 마커로 지도 이동·강조
+          // 카드 hover/포커스(키보드) 시 해당 마커로 지도 이동·강조(목록은 흔들지 않음)
           card.addEventListener("mouseenter", function () { focusFromCard(card); });
           card.addEventListener("focusin", function () { focusFromCard(card); });
         });
-        fit();
 
-        // 칩 필터 변경 시 마커 표시/숨김 동기화 + 보이는 마커로 재적합
-        document.addEventListener("filterchange", function () {
-          var vb = new kakao.maps.LatLngBounds(); var any = false;
-          cards.forEach(function (c) {
-            var m = markers[c.dataset.pblanc];
-            if (!m) return;
-            var hide = hidden(c);
-            m.setMap(hide ? null : map);
-            if (!hide) { vb.extend(m.getPosition()); any = true; }
-          });
-          if (any) map.setBounds(vb);
-        });
+        // 사용자가 지도를 이동(드래그)/확대축소하면 목록을 그 범위로 다시 필터한다.
+        // hover/클릭의 panTo는 dragend/zoom_changed를 발생시키지 않아 목록이 안정적으로 유지된다.
+        kakao.maps.event.addListener(map, "dragend", window.chungyakApplyList);
+        kakao.maps.event.addListener(map, "zoom_changed", window.chungyakApplyList);
+        window.chungyakApplyList();   // 초기 강남역 범위로 목록 필터
       } catch (e) { el.dataset.ready = ""; mapDashFailed(); }
     });
   })();
