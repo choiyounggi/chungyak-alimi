@@ -1,0 +1,44 @@
+{# 공고 카드(대시보드·북마크 페이지 공용). it = app.py _dashboard_item dict. #}
+{% macro notice_card(it) %}
+{% set n = it.notice %}
+<div class="card"
+     data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}"
+     data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}"
+     data-pblanc="{{ n.pblanc_no }}"
+     data-lat="{{ it.lat if it.lat is not none else '' }}"
+     data-lng="{{ it.lng if it.lng is not none else '' }}"
+     data-adres="{{ it.adres or '' }}"
+     data-title="{{ n.house_nm }}">
+  <div class="head-row">
+    <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
+    <div class="head-actions">
+      {% if it.dday is not none %}
+        {% if it.dday < 0 %}<span class="badge badge--pre">D+{{ -it.dday }} 예정</span>
+        {% elif it.dday <= 3 %}<span class="badge badge--soon">D-{{ it.dday }} 임박</span>
+        {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
+        {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
+      {% endif %}
+      <button type="button" class="bookmark-btn{{ ' is-on' if it.bookmarked else '' }}"
+              data-pblanc="{{ n.pblanc_no }}"
+              aria-pressed="{{ 'true' if it.bookmarked else 'false' }}"
+              aria-label="북마크" title="북마크">
+        <svg class="ic"><use href="#i-bookmark"></use></svg>
+      </button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="tag">{{ n.area_nm or '-' }}</span>
+    {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{{ it.my_rank }}</span>{% endif %}
+    <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
+  </div>
+  {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
+  <div class="row">
+    <span><svg class="ic"><use href="#i-calendar"></use></svg> 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
+  </div>
+  <div class="row">
+    {% if it.price_lo %}<span><svg class="ic"><use href="#i-won"></use></svg> <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
+    {% if it.area_lo %}<span><svg class="ic"><use href="#i-ruler"></use></svg> {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
+    <span><svg class="ic"><use href="#i-building"></use></svg> {{ n.tot_suply_hshldco or '-' }}세대</span>
+  </div>
+</div>
+{% endmacro %}
