@@ -47,6 +47,8 @@ def _item(**over):
         my_rank="1순위",
         specials=["신혼부부", "생애최초"],
         adres="경기도 화성시 동탄면 1-2",
+        lat=None,
+        lng=None,
         price_lo=45000,
         price_hi=52000,
         area_lo=59.9,
@@ -70,9 +72,9 @@ def _cfg(**over):
     return base
 
 
-def _render(items, cfg=None, today="2026-07-22") -> str:
+def _render(items, cfg=None, today="2026-07-22", kakao_key="") -> str:
     return _env().get_template("index.html").render(
-        items=items, cfg=cfg or _cfg(), today=today
+        items=items, cfg=cfg or _cfg(), today=today, kakao_key=kakao_key
     )
 
 
@@ -183,6 +185,78 @@ def test_filter_multiselect_js_present():
     assert 'setAttribute("aria-pressed"' in raw
     # 과거 단일 선택(active = null) 잔재 없음
     assert "var active = null" not in raw
+
+
+# ── 지도 레이아웃: kakao_key 있을 때 2단 grid + 지도 컨테이너 + 카드 좌표 data-* ──
+def test_map_layout_with_kakao_key():
+    out = _render([_item(lat=37.61, lng=126.71)], kakao_key="TESTKEY")
+    # 2단 레이아웃 + 지도 컨테이너
+    assert "map-layout" in out
+    assert 'id="chungyak-map"' in out
+    # 카드 좌표/식별 data-* (Task 03 JS가 읽음)
+    assert 'data-pblanc="2026000123"' in out
+    assert 'data-lat="37.61"' in out
+    assert 'data-lng="126.71"' in out
+    assert 'data-title="테스트힐스테이트"' in out
+    assert 'data-adres="경기도 화성시 동탄면 1-2"' in out
+    # 리스트 패널 안에 카드가 존재(리스트는 유지)
+    assert 'class="list-panel' in out
+    assert 'class="card"' in out
+    # 내부 제목 앵커는 그대로(중첩 방지: 카드는 div, 링크는 title 앵커)
+    assert 'href="/notice/2026000123"' in out
+
+
+# ── 경계값: kakao_key 없으면 지도 미노출 + 리스트 전체폭, 카드는 유지 ──
+def test_no_map_without_kakao_key():
+    out = _render([_item()], kakao_key="")
+    assert 'id="chungyak-map"' not in out
+    assert "list-panel--full" in out  # 리스트 전체폭
+    assert 'class="card"' in out  # 리스트는 여전히 렌더
+    # 칩 필터도 그대로
+    assert 'data-ftype="area"' in out
+
+
+# ── 경계값: 좌표 None → data-lat/lng 빈 값으로 렌더, 예외 없음 ──
+def test_card_data_empty_coords():
+    out = _render([_item(lat=None, lng=None)], kakao_key="TESTKEY")
+    assert 'data-lat=""' in out
+    assert 'data-lng=""' in out
+    # 좌표 없어도 카드/식별자·주소는 유지
+    assert 'data-pblanc="2026000123"' in out
+    assert 'data-adres="경기도 화성시 동탄면 1-2"' in out
+
+
+# ── 지도 JS: kakao_key 있을 때 SDK 로드 + 지오코딩 사다리 재사용 + 상호작용/필터연동 ──
+def test_map_js_present_with_kakao_key():
+    out = _render([_item(lat=37.61, lng=126.71)], kakao_key="TESTKEY")
+    # 카카오 SDK 로드(services 라이브러리) + 키 주입 + 실패 안내(detail 패턴 재사용)
+    assert "dapi.kakao.com" in out
+    assert "libraries=services" in out
+    assert "TESTKEY" in out
+    assert 'onerror="mapDashFailed()"' in out
+    assert "kakao.maps.load" in out
+    assert "12000" in out  # 로드 실패 타임아웃 보존
+    # 좌표 없는 공고용 지오코딩 사다리 재사용
+    assert "addressSearch" in out
+    # 리스트↔지도 연동 + 필터-마커 동기화
+    assert "filterchange" in out
+    assert "card--active" in out
+    assert "panTo" in out                # 카드 hover/focus → 마커로 지도 이동
+    assert "scrollIntoView" in out       # 마커 클릭 → 해당 카드로 스크롤
+    assert "setMap" in out               # 필터 변경 → 마커 표시/숨김 토글(재조회 없음)
+    # XSS 안전: 오버레이 DOM은 문자열 이어붙이기 대신 createElement/textContent
+    assert "createElement" in out
+    assert "textContent" in out
+
+
+# ── 경계값: kakao_key 없으면 지도 JS 미주입, 칩 필터 JS는 보존 ──
+def test_map_js_absent_without_kakao_key():
+    out = _render([_item()], kakao_key="")
+    assert "dapi.kakao.com" not in out
+    assert "mapDashFailed" not in out
+    # 기존 칩 필터 JS는 그대로
+    assert "button.chip" in out
+    assert 'getElementById("js-empty")' in out
 
 
 # ── 경계: 지역/유형 미설정 시 '전국/전체 유형'이 고정 조건으로 표기 ──

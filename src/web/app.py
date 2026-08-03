@@ -143,12 +143,15 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
         }
         if "신혼" in ((n.house_secd_nm or "") + (n.house_nm or "")):
             specials.add("신혼부부")
+        centroid = _polygon_centroid((n.raw or {}).get("_polygon"))
         items.append(
             {
                 "notice": n,
                 "my_rank": my_rank,
                 "specials": sorted(specials),
                 "adres": n.hsslpy_adres or (n.raw or {}).get("HSSPLY_ADRES"),
+                "lat": centroid[0] if centroid else None,
+                "lng": centroid[1] if centroid else None,
                 "price_lo": min(prices) if prices else None,
                 "price_hi": max(prices) if prices else None,
                 "area_lo": min(areas) if areas else None,
@@ -168,6 +171,25 @@ def _int(v) -> int:
         return int(v)
     except (TypeError, ValueError):
         return 0
+
+
+def _polygon_centroid(poly) -> tuple[float, float] | None:
+    """폴리곤 [[lng,lat],...] → 중심좌표 (lat, lng). 없거나 형식 이상이면 None."""
+    if not poly or not isinstance(poly, list):
+        return None
+    lats, lngs = [], []
+    for pt in poly:
+        if not isinstance(pt, (list, tuple)) or len(pt) < 2:
+            continue
+        try:
+            lng, lat = float(pt[0]), float(pt[1])
+        except (TypeError, ValueError):
+            continue
+        lats.append(lat)
+        lngs.append(lng)
+    if not lats:
+        return None
+    return (sum(lats) / len(lats), sum(lngs) / len(lngs))
 
 
 def _range(raw: dict, bgn: str, end: str) -> str | None:
@@ -273,5 +295,5 @@ def index(request: Request):
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
-        {"items": items, "cfg": cfg, "today": date.today()},
+        {"items": items, "cfg": cfg, "today": date.today(), "kakao_key": settings.kakao_js_key},
     )

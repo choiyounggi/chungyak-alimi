@@ -4,9 +4,24 @@
 {% block head %}
 <style>
   /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base 토큰 참조 */
+  /* 지도+리스트 2단을 위해 이 페이지만 컨테이너를 넓게(base .wrap=840px 오버라이드) */
+  .wrap{max-width:1280px}
   .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
   .head h1{font-size:24px}
   @media (max-width:640px){ .head h1{font-size:21px} }
+  /* 지도(좌) + 리스트(우) 2단 grid */
+  .map-layout{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start}
+  .map-layout--nomap{display:block}
+  #chungyak-map{width:100%;height:calc(100vh - 150px);min-height:420px;position:sticky;top:16px;
+    border-radius:var(--r-lg);border:1px solid var(--hairline);background:var(--surface-strong)}
+  .list-panel{min-width:0}                 /* grid 자식 overflow 방지 */
+  .list-panel--full{min-width:0}
+  .card--active{border-color:var(--accent-teal);box-shadow:0 2px 12px rgba(26,58,58,.18)}
+  /* 모바일(≤900px): 지도 상단 고정높이 → 리스트 세로 스택 */
+  @media (max-width:900px){
+    .map-layout{grid-template-columns:1fr}
+    #chungyak-map{position:static;height:52vh;min-height:300px}
+  }
   .count{color:var(--accent-teal);font-weight:700}
   /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리 */
   .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px}
@@ -57,41 +72,64 @@
     </div>
   </div>
 
-  {% if not items %}
-    <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
-  {% endif %}
-  <div class="empty" id="js-empty" style="display:none">
-    <svg class="ic"><use href="#i-search"></use></svg> 선택한 필터에 맞는 공고가 없어요.
-  </div>
+  {# 리스트 패널(카드 목록) — 지도 유무와 무관하게 동일 마크업을 한 번만 정의 #}
+  {% macro list_panel(extra_class="") %}
+  <div class="list-panel {{ extra_class }}">
+    {% if not items %}
+      <div class="empty">조건에 맞는 진행·예정 공고가 없어요.</div>
+    {% endif %}
+    <div class="empty" id="js-empty" style="display:none">
+      <svg class="ic"><use href="#i-search"></use></svg> 선택한 필터에 맞는 공고가 없어요.
+    </div>
 
-  {% for it in items %}
-  {% set n = it.notice %}
-  <div class="card" data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}" data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}">
-    <div class="head-row">
-      <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
-      {% if it.dday is not none %}
-        {% if it.dday < 0 %}<span class="badge badge--pre">D+{{ -it.dday }} 예정</span>
-        {% elif it.dday <= 3 %}<span class="badge badge--soon">D-{{ it.dday }} 임박</span>
-        {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
-        {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
-      {% endif %}
+    {% for it in items %}
+    {% set n = it.notice %}
+    <div class="card"
+         data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}"
+         data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}"
+         data-pblanc="{{ n.pblanc_no }}"
+         data-lat="{{ it.lat if it.lat is not none else '' }}"
+         data-lng="{{ it.lng if it.lng is not none else '' }}"
+         data-adres="{{ it.adres or '' }}"
+         data-title="{{ n.house_nm }}">
+      <div class="head-row">
+        <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
+        {% if it.dday is not none %}
+          {% if it.dday < 0 %}<span class="badge badge--pre">D+{{ -it.dday }} 예정</span>
+          {% elif it.dday <= 3 %}<span class="badge badge--soon">D-{{ it.dday }} 임박</span>
+          {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
+          {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
+        {% endif %}
+      </div>
+      <div class="row">
+        <span class="tag">{{ n.area_nm or '-' }}</span>
+        {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{{ it.my_rank }}</span>{% endif %}
+        <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
+      </div>
+      {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
+      <div class="row">
+        <span><svg class="ic"><use href="#i-calendar"></use></svg> 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
+      </div>
+      <div class="row">
+        {% if it.price_lo %}<span><svg class="ic"><use href="#i-won"></use></svg> <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
+        {% if it.area_lo %}<span><svg class="ic"><use href="#i-ruler"></use></svg> {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
+        <span><svg class="ic"><use href="#i-building"></use></svg> {{ n.tot_suply_hshldco or '-' }}세대</span>
+      </div>
     </div>
-    <div class="row">
-      <span class="tag">{{ n.area_nm or '-' }}</span>
-      {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{{ it.my_rank }}</span>{% endif %}
-      <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
-    </div>
-    {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
-    <div class="row">
-      <span><svg class="ic"><use href="#i-calendar"></use></svg> 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
-    </div>
-    <div class="row">
-      {% if it.price_lo %}<span><svg class="ic"><use href="#i-won"></use></svg> <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
-      {% if it.area_lo %}<span><svg class="ic"><use href="#i-ruler"></use></svg> {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
-      <span><svg class="ic"><use href="#i-building"></use></svg> {{ n.tot_suply_hshldco or '-' }}세대</span>
-    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
+  {% endmacro %}
+
+  {% if kakao_key %}
+  <div class="map-layout">
+    <div id="chungyak-map"></div>
+    {{ list_panel() }}
+  </div>
+  {% else %}
+  <div class="map-layout map-layout--nomap">
+    {{ list_panel("list-panel--full") }}
+  </div>
+  {% endif %}
 {% endblock %}
 
 {% block footer %}
@@ -139,6 +177,8 @@
     });
     if (countEl) countEl.textContent = visible;
     if (emptyEl) emptyEl.style.display = cards.length && !visible ? "" : "none";
+    // 지도 마커도 같이 토글하도록 알림(리스너 없으면 무해)
+    document.dispatchEvent(new CustomEvent("filterchange"));
   }
 
   chips.forEach(function (chip) {
@@ -160,4 +200,137 @@
   });
 })();
 </script>
+
+{% if kakao_key %}
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services" onerror="mapDashFailed()"></script>
+<script>
+  // 대시보드 지도: 각 카드의 data-*(lat/lng/adres/title)로 마커를 만든다.
+  // 좌표(서버 폴리곤 중심)가 없으면 detail.html과 동일한 지오코딩 사다리로 클라이언트 검색.
+  // 로드 실패 처리(onerror + failTimer + 엔진 부분실패 가드)는 detail.html 패턴 재사용.
+  function mapDashFailed() {
+    var el = document.getElementById("chungyak-map");
+    if (!el || el.dataset.ready === "1") return;
+    el.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:13.5px">' +
+      '<svg class="ic" style="width:28px;height:28px"><use href="#i-map"></use></svg>' +
+      '<b style="color:var(--body)">지도를 불러오지 못했어요</b>' +
+      '<span>카카오 지도 서버 연결이 원활하지 않아요. 잠시 후 새로고침 해주세요.</span>' +
+      '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--hairline);background:#fff;color:var(--body);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:10px;cursor:pointer">새로고침</button>' +
+      '</div>';
+  }
+
+  (function () {
+    var el = document.getElementById("chungyak-map");
+    if (!el) return;
+    if (!(window.kakao && kakao.maps && kakao.maps.load)) { mapDashFailed(); return; }
+    var failTimer = setTimeout(mapDashFailed, 12000);
+    kakao.maps.load(function () {
+      clearTimeout(failTimer);
+      if (!(kakao.maps.LatLng && kakao.maps.Map && kakao.maps.services)) { mapDashFailed(); return; }
+      try {
+        el.dataset.ready = "1";
+        var map = new kakao.maps.Map(el, {
+          center: new kakao.maps.LatLng(37.5665, 126.978), level: 12
+        });
+        var geocoder = new kakao.maps.services.Geocoder();
+        var cards = Array.prototype.slice.call(document.querySelectorAll(".list-panel .card"));
+        var markers = {};                 // pblanc → Marker (한 번만 생성, 캐시)
+        var bounds = new kakao.maps.LatLngBounds();
+        var haveBounds = false;
+        var activeMarker = null;
+
+        function fit() { if (haveBounds) map.setBounds(bounds); }
+
+        function hidden(card) { return card.style.display === "none"; }
+
+        // 지오코딩 사다리(detail.html과 동일): 전체 → 앞4→3→2단어
+        function candidatesOf(full) {
+          var parts = full.replace(/\(.*?\)/g, " ").split(/\s+/).filter(Boolean);
+          var list = [full];
+          for (var k = Math.min(4, parts.length); k >= 2; k--) {
+            var cand = parts.slice(0, k).join(" ");
+            if (list.indexOf(cand) === -1) list.push(cand);
+          }
+          return list;
+        }
+
+        function focusCard(card) {
+          cards.forEach(function (c) { c.classList.remove("card--active"); });
+          card.classList.add("card--active");
+          card.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(function () { card.classList.remove("card--active"); }, 2000);
+        }
+
+        function emphasize(marker) {
+          if (activeMarker) activeMarker.setZIndex(0);
+          marker.setZIndex(10);
+          activeMarker = marker;
+          map.panTo(marker.getPosition());
+        }
+
+        function addMarker(card, lat, lng) {
+          if (markers[card.dataset.pblanc]) return;   // 1회만
+          var pos = new kakao.maps.LatLng(lat, lng);
+          var m = new kakao.maps.Marker({ map: hidden(card) ? null : map, position: pos });
+          markers[card.dataset.pblanc] = m;
+          // 인포윈도우 내용은 문자열 이어붙이기 없이 textContent로(신뢰 못하는 API 필드 XSS 방지)
+          var box = document.createElement("div");
+          box.style.cssText = "padding:6px 10px;font-size:12.5px;font-weight:700;white-space:nowrap";
+          box.textContent = card.dataset.title || "";
+          var iw = new kakao.maps.InfoWindow({ content: box });
+          kakao.maps.event.addListener(m, "click", function () {
+            emphasize(m); iw.open(map, m); focusCard(card);
+          });
+          bounds.extend(pos); haveBounds = true;
+          if (!hidden(card)) fit();
+        }
+
+        function focusFromCard(card) {
+          var m = markers[card.dataset.pblanc];
+          if (m) emphasize(m);
+        }
+
+        function geocodeCard(card) {
+          var full = card.dataset.adres || "";
+          if (!full) return;
+          var cands = candidatesOf(full);
+          (function tryGeocode(i) {
+            if (i >= cands.length) return;             // 못 찾으면 마커 없음(리스트엔 남음)
+            geocoder.addressSearch(cands[i], function (r, s) {
+              if (s === kakao.maps.services.Status.OK) {
+                addMarker(card, parseFloat(r[0].y), parseFloat(r[0].x));
+                return;
+              }
+              tryGeocode(i + 1);
+            });
+          })(0);
+        }
+
+        cards.forEach(function (card) {
+          var lat = parseFloat(card.dataset.lat), lng = parseFloat(card.dataset.lng);
+          if (isFinite(lat) && isFinite(lng)) addMarker(card, lat, lng);
+          else geocodeCard(card);
+          // 카드 hover/포커스(키보드) 시 해당 마커로 지도 이동·강조
+          card.addEventListener("mouseenter", function () { focusFromCard(card); });
+          card.addEventListener("focusin", function () { focusFromCard(card); });
+        });
+        fit();
+
+        // 칩 필터 변경 시 마커 표시/숨김 동기화 + 보이는 마커로 재적합
+        document.addEventListener("filterchange", function () {
+          var vb = new kakao.maps.LatLngBounds(); var any = false;
+          cards.forEach(function (c) {
+            var m = markers[c.dataset.pblanc];
+            if (!m) return;
+            var hide = hidden(c);
+            m.setMap(hide ? null : map);
+            if (!hide) { vb.extend(m.getPosition()); any = true; }
+          });
+          if (any) map.setBounds(vb);
+        });
+      } catch (e) { el.dataset.ready = ""; mapDashFailed(); }
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}
