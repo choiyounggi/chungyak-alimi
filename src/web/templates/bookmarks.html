@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}북마크 · 청약 알리미{% endblock %}
+
+{% block head %}
+<style>
+  .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
+  .head h1{font-size:24px}
+  @media (max-width:640px){ .head h1{font-size:21px} }
+  .count{color:var(--accent-teal);font-weight:700}
+</style>
+{% endblock %}
+
+{% block content %}
+  {% from "_macros.html" import notice_card %}
+  <div class="head">
+    <h1>북마크</h1>
+    <span class="sub"><span class="count">{{ items|length }}</span>건</span>
+  </div>
+
+  {% if not items %}
+    <div class="empty">아직 북마크한 공고가 없어요. 목록에서 <svg class="ic"><use href="#i-bookmark"></use></svg> 를 눌러 저장하세요.</div>
+  {% endif %}
+
+  {% for it in items %}
+  {{ notice_card(it) }}
+  {% endfor %}
+{% endblock %}
+
+{% block footer %}
+<footer class="footer">chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
+{% endblock %}

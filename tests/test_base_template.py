@@ -19,7 +19,7 @@ BASE = TEMPLATES / "base.html"
 ICON_IDS = [
     "i-pin", "i-calendar", "i-won", "i-home", "i-award", "i-doc", "i-clip",
     "i-image", "i-map", "i-search", "i-target", "i-arrow-left", "i-arrow-right",
-    "i-gift", "i-building", "i-ruler", "i-clock", "i-alert",
+    "i-gift", "i-building", "i-ruler", "i-clock", "i-alert", "i-bookmark",
 ]
 
 # 브리프 [색상/라운드/간격/폰트] — :root 토큰 정의(선언부, `--name:` 형태로 존재 검증).
@@ -49,6 +49,8 @@ REQUIRED_SELECTORS = [
     "label", "input", "input:focus", "input.invalid",
     ".field", ".field-error", ".field.has-error .field-error", ".form-error",
     ".footer", ".empty", ".ic", ".muted", ".sub", ".display",
+    ".topnav", ".bookmark-btn", ".bookmark-btn.is-on",
+    ".head-row", ".head-actions", "a.title", ".row",
 ]
 
 # 브리프 [Jinja 블록 계약] — 정확히 이 6개.
@@ -103,11 +105,28 @@ def test_base_defines_every_icon_symbol(icon_id):
     assert 'stroke-width="1.8"' in tag, f"{icon_id}: stroke-width 1.8 아님"
 
 
-# ── 정상: symbol 정확히 18개(누락·초과 방지) ──
-def test_base_has_exactly_18_symbols():
+# ── 정상: symbol 정확히 19개(누락·초과 방지) ──
+def test_base_has_exactly_19_symbols():
     out = _env().get_template("base.html").render()
     symbols = re.findall(r'<symbol\b', out)
-    assert len(symbols) == len(ICON_IDS) == 18, f"symbol 개수 불일치: {len(symbols)}"
+    assert len(symbols) == len(ICON_IDS) == 19, f"symbol 개수 불일치: {len(symbols)}"
+
+
+# ── 정상: 상단 내비(전체/북마크) + 북마크 토글 JS 계약 ──
+def test_base_topnav_and_bookmark_toggle_js():
+    out = _env().get_template("base.html").render()
+    # 상단 내비: 전체 / 북마크(아이콘 포함)
+    assert 'class="topnav"' in out
+    assert 'href="/bookmarks"' in out
+    assert "전체" in out and "북마크" in out
+    assert 'href="#i-bookmark"' in out
+    # 북마크 토글 JS: .bookmark-btn 클릭 → /bookmark/ PUT|DELETE + aria-pressed 토글
+    assert "bookmark-btn" in out
+    assert "/bookmark/" in out
+    assert '"PUT"' in out and '"DELETE"' in out
+    assert "aria-pressed" in out
+    # 북마크 페이지에서 해제 시 카드 제거
+    assert "/bookmarks" in out and "removeChild" in out
 
 
 # ── 정상: Jinja 블록 6개 이름 계약(정확히 이 이름) 존재 ──

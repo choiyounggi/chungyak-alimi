@@ -28,17 +28,12 @@
   .filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .filter-label{font-size:12px;font-weight:700;color:var(--muted);flex:none;margin-right:2px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
-  .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
-  .head-row .badge{flex:none}
-  a.title{color:var(--ink);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4;flex:1 1 auto;min-width:0}
-  a.title:hover{color:var(--accent-teal)}
-  .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--body)}
-  .row b{color:var(--body-strong);font-weight:700}
-  .row .ic{color:var(--muted)}
+  /* .head-row/.head-actions/a.title/.row 카드 스타일은 base.html에 공용 정의됨 */
 </style>
 {% endblock %}
 
 {% block content %}
+  {% from "_macros.html" import notice_card %}
   <div class="head">
     <h1>내 관심 청약</h1>
     <span class="sub">{{ today }} 기준 · <span class="count">{{ items|length }}</span>건</span>
@@ -84,39 +79,7 @@
     </div>
 
     {% for it in items %}
-    {% set n = it.notice %}
-    <div class="card"
-         data-area="{{ n.area_nm or '' }}" data-secd="{{ n.house_secd_nm or '' }}"
-         data-specials="{{ it.specials|join('|') }}" data-rank="{{ it.my_rank or '' }}"
-         data-pblanc="{{ n.pblanc_no }}"
-         data-lat="{{ it.lat if it.lat is not none else '' }}"
-         data-lng="{{ it.lng if it.lng is not none else '' }}"
-         data-adres="{{ it.adres or '' }}"
-         data-title="{{ n.house_nm }}">
-      <div class="head-row">
-        <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
-        {% if it.dday is not none %}
-          {% if it.dday < 0 %}<span class="badge badge--pre">D+{{ -it.dday }} 예정</span>
-          {% elif it.dday <= 3 %}<span class="badge badge--soon">D-{{ it.dday }} 임박</span>
-          {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
-          {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
-        {% endif %}
-      </div>
-      <div class="row">
-        <span class="tag">{{ n.area_nm or '-' }}</span>
-        {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{{ it.my_rank }}</span>{% endif %}
-        <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
-      </div>
-      {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
-      <div class="row">
-        <span><svg class="ic"><use href="#i-calendar"></use></svg> 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
-      </div>
-      <div class="row">
-        {% if it.price_lo %}<span><svg class="ic"><use href="#i-won"></use></svg> <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
-        {% if it.area_lo %}<span><svg class="ic"><use href="#i-ruler"></use></svg> {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}
-        <span><svg class="ic"><use href="#i-building"></use></svg> {{ n.tot_suply_hshldco or '-' }}세대</span>
-      </div>
-    </div>
+    {{ notice_card(it) }}
     {% endfor %}
   </div>
   {% endmacro %}

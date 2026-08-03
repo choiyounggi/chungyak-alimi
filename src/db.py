@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     create_engine,
+    delete,
     func,
     select,
 )
@@ -127,6 +128,15 @@ class NotifyLog(Base):
     pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
     channel: Mapped[str] = mapped_column(String, primary_key=True, default="telegram")
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Bookmark(Base):
+    """사용자가 즐겨찾기한 공고(단일 사용자라 pblanc_no만으로 식별)."""
+
+    __tablename__ = "bookmark"
+
+    pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 engine = create_engine(settings.database_url, future=True)
@@ -351,3 +361,41 @@ def house_types_of(pblanc_no: str, *, session: Session) -> list[NoticeHouseType]
             select(NoticeHouseType).where(NoticeHouseType.pblanc_no == pblanc_no)
         ).all()
     )
+
+
+def add_bookmark(pblanc_no: str, *, session: Session | None = None) -> None:
+    """공고를 북마크에 추가(멱등 — 이미 있으면 무시)."""
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        stmt = pg_insert(Bookmark).values(pblanc_no=pblanc_no)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["pblanc_no"])
+        session.execute(stmt)
+        session.commit()
+    finally:
+        if own:
+            session.close()
+
+
+def remove_bookmark(pblanc_no: str, *, session: Session | None = None) -> None:
+    """북마크 해제(없어도 에러 없음 — 멱등)."""
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        session.execute(delete(Bookmark).where(Bookmark.pblanc_no == pblanc_no))
+        session.commit()
+    finally:
+        if own:
+            session.close()
+
+
+def is_bookmarked(pblanc_no: str, *, session: Session) -> bool:
+    return (
+        session.scalar(select(Bookmark.pblanc_no).where(Bookmark.pblanc_no == pblanc_no))
+        is not None
+    )
+
+
+def bookmarked_pblanc_nos(*, session: Session) -> set[str]:
+    """북마크된 공고번호 집합."""
+    return set(session.scalars(select(Bookmark.pblanc_no)).all())

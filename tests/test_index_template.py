@@ -55,6 +55,7 @@ def _item(**over):
         area_hi=84.9,
         deadline=None,
         dday=5,
+        bookmarked=False,
     )
     base.update(over)
     return base
@@ -185,6 +186,18 @@ def test_filter_multiselect_js_present():
     assert 'setAttribute("aria-pressed"' in raw
     # 과거 단일 선택(active = null) 잔재 없음
     assert "var active = null" not in raw
+
+
+# ── 카드 북마크 버튼: 상태(on/off) 반영 ──
+def test_card_bookmark_button():
+    off = _render([_item(bookmarked=False)])
+    assert 'class="bookmark-btn"' in off              # 미북마크 → is-on 없음
+    assert 'data-pblanc="2026000123"' in off
+    assert 'aria-pressed="false"' in off
+    assert 'href="#i-bookmark"' in off
+    on = _render([_item(bookmarked=True)])
+    assert "bookmark-btn is-on" in on                 # 북마크됨 → is-on
+    assert 'aria-pressed="true"' in on
 
 
 # ── 지도 레이아웃: kakao_key 있을 때 2단 grid + 지도 컨테이너 + 카드 좌표 data-* ──

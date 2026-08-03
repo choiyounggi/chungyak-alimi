@@ -12,7 +12,18 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
-from ..db import SUPERSEDED_REASON, MatchResult, Notice, SessionLocal, house_types_of, init_db
+from ..db import (
+    SUPERSEDED_REASON,
+    Bookmark,
+    MatchResult,
+    Notice,
+    SessionLocal,
+    add_bookmark,
+    bookmarked_pblanc_nos,
+    house_types_of,
+    init_db,
+    remove_bookmark,
+)
 from ..filters import load_filter_config
 from ..scoring import judge_notice, load_profile
 
@@ -118,52 +129,73 @@ def logout(request: Request):
     return RedirectResponse("/login", status_code=303)
 
 
+def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
+    """공고 1건 → 카드용 dict(분양가·면적·D-day·좌표·특공·북마크). 대시보드/북마크 공용."""
+    hts = house_types_of(n.pblanc_no, session=session)
+    prices = [h.lttot_top_amount for h in hts if h.lttot_top_amount]
+    areas = [float(h.suply_ar) for h in hts if h.suply_ar is not None]
+    deadlines = [d for d in (n.rcept_endde, n.spsply_rcept_endde) if d]
+    deadline = max(deadlines) if deadlines else None
+    # 카드 필터링용 특공 라벨: 주택형 raw 세대수 + 이름 기반(신혼희망타운 등 LH엔 세대수 필드가 없음)
+    specials = {
+        label
+        for ht in hts
+        for key, label in SPECIAL_SUPPLY_LABELS.items()
+        if _int(ht.raw.get(key)) > 0
+    }
+    if "신혼" in ((n.house_secd_nm or "") + (n.house_nm or "")):
+        specials.add("신혼부부")
+    centroid = _polygon_centroid((n.raw or {}).get("_polygon"))
+    return {
+        "notice": n,
+        "my_rank": my_rank,
+        "specials": sorted(specials),
+        "adres": n.hsslpy_adres or (n.raw or {}).get("HSSPLY_ADRES"),
+        "lat": centroid[0] if centroid else None,
+        "lng": centroid[1] if centroid else None,
+        "price_lo": min(prices) if prices else None,
+        "price_hi": max(prices) if prices else None,
+        "area_lo": min(areas) if areas else None,
+        "area_hi": max(areas) if areas else None,
+        "deadline": deadline,
+        "dday": (deadline - today).days if deadline else None,
+        "bookmarked": bookmarked,
+    }
+
+
 def matched_dashboard(session, today: date | None = None) -> list[dict]:
     """매칭된(관심) 공고를 마감임박순으로, 분양가·면적·D-day 계산해 반환."""
     today = today or date.today()
+    bmarks = bookmarked_pblanc_nos(session=session)
     q = (
         select(Notice, MatchResult.my_rank)
         .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
         .where(MatchResult.matched.is_(True))
         .order_by(Notice.rcept_endde)
     )
-    items: list[dict] = []
-    for n, my_rank in session.execute(q).all():
-        hts = house_types_of(n.pblanc_no, session=session)
-        prices = [h.lttot_top_amount for h in hts if h.lttot_top_amount]
-        areas = [float(h.suply_ar) for h in hts if h.suply_ar is not None]
-        deadlines = [d for d in (n.rcept_endde, n.spsply_rcept_endde) if d]
-        deadline = max(deadlines) if deadlines else None
-        # 카드 필터링용 특공 라벨: 주택형 raw 세대수 + 이름 기반(신혼희망타운 등 LH엔 세대수 필드가 없음)
-        specials = {
-            label
-            for ht in hts
-            for key, label in SPECIAL_SUPPLY_LABELS.items()
-            if _int(ht.raw.get(key)) > 0
-        }
-        if "신혼" in ((n.house_secd_nm or "") + (n.house_nm or "")):
-            specials.add("신혼부부")
-        centroid = _polygon_centroid((n.raw or {}).get("_polygon"))
-        items.append(
-            {
-                "notice": n,
-                "my_rank": my_rank,
-                "specials": sorted(specials),
-                "adres": n.hsslpy_adres or (n.raw or {}).get("HSSPLY_ADRES"),
-                "lat": centroid[0] if centroid else None,
-                "lng": centroid[1] if centroid else None,
-                "price_lo": min(prices) if prices else None,
-                "price_hi": max(prices) if prices else None,
-                "area_lo": min(areas) if areas else None,
-                "area_hi": max(areas) if areas else None,
-                "deadline": deadline,
-                "dday": (deadline - today).days if deadline else None,
-            }
-        )
+    items = [
+        _dashboard_item(session, n, my_rank, today, n.pblanc_no in bmarks)
+        for n, my_rank in session.execute(q).all()
+    ]
     # 순위별 정렬: 1순위 → 2순위 → 판정불가(공공 등), 같은 그룹 안에선 마감임박순
     rank_order = {"1순위": 0, "2순위": 1}
     items.sort(key=lambda it: (rank_order.get(it["my_rank"], 2), it["deadline"] or date.max))
     return items
+
+
+def bookmarked_dashboard(session, today: date | None = None) -> list[dict]:
+    """북마크된 공고만(매칭 여부 무관) 최근 북마크순으로 반환."""
+    today = today or date.today()
+    q = (
+        select(Notice, MatchResult.my_rank)
+        .join(Bookmark, Notice.pblanc_no == Bookmark.pblanc_no)
+        .outerjoin(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
+        .order_by(Bookmark.created_at.desc())
+    )
+    return [
+        _dashboard_item(session, n, my_rank, today, True)
+        for n, my_rank in session.execute(q).all()
+    ]
 
 
 def _int(v) -> int:
@@ -273,6 +305,26 @@ def healthz() -> dict:
     return {"ok": True}
 
 
+@app.put("/bookmark/{pblanc_no}")
+def bookmark_add(pblanc_no: str, request: Request) -> dict:
+    if not _authed(request):
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    with SessionLocal() as session:
+        if session.scalar(select(Notice.pblanc_no).where(Notice.pblanc_no == pblanc_no)) is None:
+            raise HTTPException(status_code=404, detail="공고를 찾을 수 없습니다")
+        add_bookmark(pblanc_no, session=session)
+    return {"bookmarked": True}
+
+
+@app.delete("/bookmark/{pblanc_no}")
+def bookmark_remove(pblanc_no: str, request: Request) -> dict:
+    if not _authed(request):
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    with SessionLocal() as session:
+        remove_bookmark(pblanc_no, session=session)
+    return {"bookmarked": False}
+
+
 @app.get("/notice/{pblanc_no}")
 def notice_detail(pblanc_no: str, request: Request):
     if not _authed(request):
@@ -297,3 +349,12 @@ def index(request: Request):
         "index.html",
         {"items": items, "cfg": cfg, "today": date.today(), "kakao_key": settings.kakao_js_key},
     )
+
+
+@app.get("/bookmarks")
+def bookmarks_page(request: Request):
+    if not _authed(request):
+        return RedirectResponse("/login", status_code=303)
+    with SessionLocal() as session:
+        items = bookmarked_dashboard(session)
+    return _TEMPLATES.TemplateResponse(request, "bookmarks.html", {"items": items})
