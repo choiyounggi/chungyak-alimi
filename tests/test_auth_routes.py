@@ -9,11 +9,16 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from src.config import settings
 from src.db import Member, MemberProfile, SessionLocal, engine, init_db
 from src.web.app import app
 
 EMAIL = "tester@example.com"
 PASSWORD = "pw-12345"
+
+# 세션 쿠키의 Secure 는 설정 구동(SESSION_HTTPS_ONLY)이다. Secure 쿠키는 http 응답에서
+# 쿠키 저장소에 담기지 않으므로, 설정값에 맞춰 스킴을 골라야 어느 환경에서도 왕복한다.
+BASE_URL = "https://testserver" if settings.session_https_only else "http://testserver"
 
 
 def _db_available() -> bool:
@@ -28,8 +33,8 @@ pytestmark = pytest.mark.skipif(not _db_available(), reason="postgres 미가용"
 
 
 def _client() -> TestClient:
-    """세션 쿠키가 Secure 이므로 https 로 호출해야 브라우저처럼 쿠키가 되돌아온다."""
-    return TestClient(app, base_url="https://testserver")
+    """설정에 맞는 스킴으로 호출해 브라우저처럼 세션 쿠키가 되돌아오게 한다(`BASE_URL` 참고)."""
+    return TestClient(app, base_url=BASE_URL)
 
 
 def _clear_members() -> None:
@@ -206,16 +211,19 @@ def test_login_and_register_pages_render(clean_members):
 
 
 def test_session_cookie_is_httponly_secure_samesite_lax(clean_members):
-    """세션 쿠키는 JS 접근 불가(httponly) + HTTPS 전용(secure) + SameSite=Lax 여야 한다."""
+    """세션 쿠키는 JS 접근 불가(httponly) + SameSite=Lax 이고, Secure 는 설정과 일치해야 한다."""
     r = _client().post(
         "/register", data={"email": EMAIL, "password": PASSWORD}, follow_redirects=False
     )
 
     set_cookie = r.headers["set-cookie"].lower()
-    assert "session=" in set_cookie
-    assert "httponly" in set_cookie
-    assert "secure" in set_cookie
-    assert "samesite=lax" in set_cookie
+    attrs = {part.strip() for part in set_cookie.split(";")}
+    assert any(a.startswith("session=") for a in attrs)
+    # 설정과 무관한 불변식
+    assert "httponly" in attrs
+    assert "samesite=lax" in attrs
+    # Secure 는 SESSION_HTTPS_ONLY 구동 — 켜져 있으면 반드시 붙고, 꺼져 있으면 붙지 않는다
+    assert ("secure" in attrs) is settings.session_https_only
 
 
 def test_logout_expires_the_session_cookie(clean_members):
