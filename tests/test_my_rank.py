@@ -124,13 +124,11 @@ def test_dashboard_sorted_by_rank(session):
 
 # ── 인덱스 렌더: 순위 칩 + 카드 배지/속성 ──
 def test_index_rank_chip_and_badge(session):
-    from fastapi.testclient import TestClient
-
-    from src.web.app import app
+    from test_auth_routes import login_client
 
     upsert_notices([_notice("S5")], session=session)
     save_match_results([("applyhome:S5", True, [], "1순위")], session=session)
-    r = TestClient(app).get("/")
+    r = login_client().get("/")
     assert 'data-ftype="rank"' in r.text
     assert 'data-rank="1순위"' in r.text
     # 디자인 개편으로 이모지(🏅) 제거 — 순위 배지는 텍스트만 렌더한다

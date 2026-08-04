@@ -19,6 +19,7 @@ from src.models import ApplyhomeHouseType, ApplyhomeNotice
 from src.web.app import app, matched_dashboard
 
 from test_applyhome import SAMPLE
+from test_auth_routes import login_client
 from test_housetype import SAMPLE_HT
 
 
@@ -64,7 +65,7 @@ def test_matched_dashboard(seeded):
 
 # ── 인덱스 렌더: 200 + 공고명 포함 ──
 def test_index_renders(seeded):
-    client = TestClient(app)
+    client = login_client()  # `/`는 회원 로그인 보호 라우트
     r = client.get("/")
     assert r.status_code == 200
     assert SAMPLE["HOUSE_NM"] in r.text
@@ -95,7 +96,7 @@ def test_dashboard_specials_from_name(seeded):
 
 # ── 인덱스 렌더: 필터 칩(지역/특공) + 카드 data 속성 ──
 def test_index_filter_chips(seeded):
-    client = TestClient(app)
+    client = login_client()
     r = client.get("/")
     assert 'data-ftype="area"' in r.text  # filters.yaml regions → 클릭 칩
     assert 'data-ftype="special"' in r.text
@@ -156,42 +157,8 @@ def test_healthz():
     assert r.json() == {"ok": True}
 
 
-# ── 인증: 세션 로그인 플로우(미인증→로그인, 로그인→대시보드) ──
-def test_login_flow(seeded, monkeypatch):
-    from src.web import app as webapp
-
-    monkeypatch.setattr(webapp.settings, "web_user", "me")
-    monkeypatch.setattr(webapp.settings, "web_password", "pw")
-    client = TestClient(app)
-
-    # 미인증 접근 → 로그인 페이지로 리다이렉트
-    r = client.get("/")
-    assert r.status_code == 200
-    assert "로그인" in r.text and "비밀번호" in r.text
-
-    # 틀린 비번 → 401 + 폼 에러 문구
-    bad = client.post("/login", data={"username": "me", "password": "wrong"})
-    assert bad.status_code == 401
-    assert "아이디 또는 비밀번호가 올바르지 않습니다" in bad.text
-
-    # 아이디 미입력 → 아이디 필드 에러
-    e1 = client.post("/login", data={"username": "", "password": "pw"})
-    assert e1.status_code == 401
-    assert "아이디를 입력해주세요" in e1.text
-
-    # 비밀번호 미입력 → 비번 필드 에러
-    e2 = client.post("/login", data={"username": "me", "password": ""})
-    assert e2.status_code == 401
-    assert "비밀번호를 입력해주세요" in e2.text
-
-    # 올바른 로그인 → 세션 → 대시보드 접근
-    ok = client.post("/login", data={"username": "me", "password": "pw"})
-    assert ok.status_code == 200
-    assert "내 관심 청약" in ok.text
-
-    # 로그아웃 → 다시 로그인 페이지
-    out = client.get("/logout")
-    assert "로그인" in out.text
+# ── 인증: basic-auth(WEB_USER/WEB_PASSWORD) 제거 — 회원 세션 로그인으로 대체(Task 05).
+#    로그인/로그아웃/보호 라우트 플로우는 tests/test_auth_routes.py 가 검증한다.
 
 
 # ── 상세: 카카오 지도(키 설정 시 렌더, 없으면 미렌더) ──

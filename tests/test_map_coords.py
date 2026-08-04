@@ -7,7 +7,6 @@ lat/lng 채움과 index 라우트 회귀는 postgres 필요 → test_web.py와 �
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from src.db import (
@@ -22,9 +21,10 @@ from src.db import (
     upsert_notices,
 )
 from src.models import ApplyhomeHouseType, ApplyhomeNotice
-from src.web.app import _polygon_centroid, app, matched_dashboard
+from src.web.app import _polygon_centroid, matched_dashboard
 
 from test_applyhome import SAMPLE
+from test_auth_routes import login_client
 from test_housetype import SAMPLE_HT
 
 
@@ -115,6 +115,6 @@ def test_index_route_still_ok_with_kakao_key(clean_db, monkeypatch):
     from src.web import app as webapp
 
     monkeypatch.setattr(webapp.settings, "kakao_js_key", "TESTKAKAOKEY")
-    r = TestClient(app).get("/")
+    r = login_client().get("/")
     assert r.status_code == 200
     assert "내 관심 청약" in r.text
