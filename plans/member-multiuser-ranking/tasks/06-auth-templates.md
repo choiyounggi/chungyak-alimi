@@ -25,6 +25,7 @@
 - `src/web/templates/register.html` (신규)
 - `src/web/templates/base.html` (네비 수정)
 - `tests/test_auth_templates.py` (신규) — 필요 시 base 템플릿 테스트 갱신 포함
+- `tests/test_login_template.py` (구 basic-auth login.html 계약 → 새 이메일 기반 login.html 계약으로 교체)
 
 ## Verify
 - `uv run pytest tests/test_auth_templates.py -q 2>&1 | tail -20` 통과.

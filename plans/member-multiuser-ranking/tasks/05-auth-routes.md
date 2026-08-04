@@ -28,13 +28,15 @@
    - `POST /register`(form: email, password): pydantic으로 email/password 검증 → `get_member_by_email`로 중복 확인, 중복이면 폼에 에러 + 409(HTML 폼이면 상태코드 409로 재렌더). 아니면 `create_member(email, hash_password(password))` 후 로그인 세션 설정 + `/`로 303.
    - `POST /login`(form): `authenticate_member` → 성공 시 세션 설정 + `/`로 303, 실패 시 폼 에러 + 401 재렌더.
    - `POST /logout`: 세션 clear + `/login`으로 303.
-5. `src/web/app.py`: `app.include_router(auth.router)`; 기존 basic-auth 의존성/설정 사용처 제거(대시보드/북마크 등은 `require_login`으로 대체 — 실제 대시보드 전환은 Task 11, 여기선 라우트 등록 + 미사용 basic-auth 제거).
+5. `src/web/app.py`: `app.include_router(auth.router)`; 기존 basic-auth(`_authed`/`WEB_USER`) 의존성·설정 제거. **보호 범위는 `/`(대시보드) 하나만** `Depends(require_login)`. `/notice/{id}`는 공개 유지. `/bookmarks` 페이지 보호 + `/bookmark/*` 엔드포인트 401 + 회원 격리는 **Task 12에서** 처리 — Task 05는 손대지 말 것.
+6. **인증 도입으로 깨지는 라우트 테스트 갱신**(Deliverables에 포함): `/`를 HTTP로 치는 기존 테스트를 로그인(회원 생성+POST /login) 후 호출하도록 수정 — tests/test_web.py, tests/test_map_coords.py, tests/test_my_rank.py(라우트 케이스만; 순수 scoring 단위 케이스는 건드리지 말 것 — Track B 하위호환 유지). tests/test_bookmark.py·tests/test_login_template.py는 Task 05가 건드리지 말 것(각각 Task 12·06 소유).
 6. SessionMiddleware 쿠키 옵션 확인: `https_only=settings.session_https_only`, `same_site="lax"`.
 
 ## Deliverables
 - `src/web/auth.py` (신규)
-- `src/web/app.py` (라우터 포함 + basic-auth 제거)
+- `src/web/app.py` (라우터 포함 + basic-auth 제거 + `/` require_login)
 - `tests/test_auth_routes.py` (신규)
+- `tests/test_web.py`, `tests/test_map_coords.py`, `tests/test_my_rank.py` (라우트 케이스 로그인 적용)
 
 ## Verify
 - `uv run pytest tests/test_auth_routes.py -q 2>&1 | tail -30` 통과.
