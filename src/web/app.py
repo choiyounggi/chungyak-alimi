@@ -28,8 +28,9 @@ from ..db import (
     remove_bookmark,
 )
 from ..filters import load_filter_config
-from ..members import get_profile, update_profile
-from ..scoring import judge_notice, load_profile
+from ..members import get_profile, profile_from_member, update_profile
+from ..regions import region_matches
+from ..scoring import judge_notice, judge_rank, load_profile
 from . import auth
 from .auth import current_member_id, require_login
 
@@ -95,7 +96,16 @@ def _authed(request: Request) -> bool:
     return not _auth_enabled() or request.session.get("authed") is True
 
 
-def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
+def _dashboard_item(
+    session,
+    n,
+    my_rank,
+    today: date,
+    bookmarked: bool,
+    *,
+    in_area: bool | None = None,
+    in_interest: bool = True,
+) -> dict:
     """공고 1건 → 카드용 dict(분양가·면적·D-day·좌표·특공·북마크). 대시보드/북마크 공용."""
     hts = house_types_of(n.pblanc_no, session=session)
     prices = [h.lttot_top_amount for h in hts if h.lttot_top_amount]
@@ -126,6 +136,10 @@ def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
         "deadline": deadline,
         "dday": (deadline - today).days if deadline else None,
         "bookmarked": bookmarked,
+        # 해당지역 여부(거주지 ∪ 소득본거지). 지역 판정을 하지 않은 문맥에선 None.
+        "in_area": in_area,
+        # 회원 관심지역에 드는가 — 관심지역 미입력이면 전부 True(폴백=전체).
+        "in_interest": in_interest,
     }
 
 
@@ -151,6 +165,66 @@ def matched_dashboard(
     # 순위별 정렬: 1순위 → 2순위 → 판정불가(공공 등), 같은 그룹 안에선 마감임박순
     rank_order = {"1순위": 0, "2순위": 1}
     items.sort(key=lambda it: (rank_order.get(it["my_rank"], 2), it["deadline"] or date.max))
+    return items
+
+
+def member_dashboard(session, member_id: int, today: date | None = None) -> list[dict]:
+    """매칭 공고를 **요청 시점에 그 회원 프로필로** 판정해 반환(D17 온더플라이).
+
+    배치가 저장한 `MatchResult.my_rank` 는 단일 사용자 시절의 값이라 쓰지 않는다.
+    해당지역은 거주지 ∪ 소득본거지로 판정하고(D18/D19), 순위와는 독립이다 —
+    "해당지역 1순위"는 `my_rank == "1순위" and in_area` 로 표현된다.
+    정렬: 해당지역 우선 → 1순위 → 2순위 → 판정불가 → 같은 그룹 안에선 마감임박순.
+    """
+    today = today or date.today()
+    prof = get_profile(member_id, session=session)
+    profile = profile_from_member(prof) if prof is not None else None
+    applicant_regions = (
+        list(prof.residence_regions or []) + list(prof.income_base_regions or [])
+        if prof is not None
+        else []
+    )
+    interest_regions = list(prof.interest_regions or []) if prof is not None else []
+    bmarks = bookmarked_pblanc_nos(member_id, session=session)
+
+    q = (
+        select(Notice)
+        .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
+        .where(MatchResult.matched.is_(True))
+        .order_by(Notice.rcept_endde)
+    )
+    items = []
+    for n in session.scalars(q).all():
+        hts = house_types_of(n.pblanc_no, session=session)
+        my_rank: str | None = None
+        # 지역 판정은 순위 지원 여부와 무관하다(공공 공고도 해당지역일 수 있다).
+        in_area = region_matches(n.area_nm, applicant_regions)
+        if profile is not None and judge_notice(n, hts, profile, today=today)["supported"]:
+            # supported 게이트는 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
+            judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
+            my_rank, in_area = judged["rank"], judged["in_area"]
+        items.append(
+            _dashboard_item(
+                session,
+                n,
+                my_rank,
+                today,
+                n.pblanc_no in bmarks,
+                in_area=in_area,
+                # 관심지역 미입력이면 필터하지 않는다(폴백=전체) — 빈 화면을 만들지 않는다.
+                in_interest=region_matches(n.area_nm, interest_regions)
+                if interest_regions
+                else True,
+            )
+        )
+    rank_order = {"1순위": 0, "2순위": 1}
+    items.sort(
+        key=lambda it: (
+            0 if it["in_area"] else 1,
+            rank_order.get(it["my_rank"], 2),
+            it["deadline"] or date.max,
+        )
+    )
     return items
 
 
@@ -492,7 +566,9 @@ def notice_detail(pblanc_no: str, request: Request):
 def index(request: Request, member_id: int = Depends(require_login)):
     cfg = load_filter_config()
     with SessionLocal() as session:
-        items = matched_dashboard(session, member_id)
+        items = member_dashboard(session, member_id)
+        prof = get_profile(member_id, session=session)
+        interest_regions = list(prof.interest_regions or []) if prof is not None else []
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -502,6 +578,7 @@ def index(request: Request, member_id: int = Depends(require_login)):
             "today": date.today(),
             "kakao_key": settings.kakao_js_key,
             "agencies": AGENCIES,
+            "interest_regions": interest_regions,
         },
     )
 
