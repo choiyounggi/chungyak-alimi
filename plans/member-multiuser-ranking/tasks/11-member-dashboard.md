@@ -13,6 +13,7 @@
 - Task 02: `get_profile`, `profile_from_member`.
 - Task 09: `judge_rank(..., applicant_regions=...)`(+`in_area`), 기존 `judge_notice`/`score_points`.
 - Task 08: `region_matches`(필터에 재사용 가능).
+- Task 12: 회원 범위 `bookmarked_pblanc_nos(member_id, *, session)` — 대시보드 북마크 플래그는 이 함수로 계산(Task 12가 11에 선행).
 - 기존 `src/web/app.py`: `matched_dashboard(session, ...)`, `_dashboard_item(...)`, `index` 라우트, 기존 지도/뷰포트·칩 필터(index.html) — 회귀 금지.
 - 기존 `src/web/templates/index.html`(칩/지도/목록), `_macros.html`(notice_card, `data-rank`).
 - 바인딩 결정: D17(온더플라이), D18(지역), D20(전체보기=클라 상태), D14(세션).

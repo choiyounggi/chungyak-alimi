@@ -51,17 +51,23 @@ Stack: Python 3 · FastAPI · Jinja2 · SQLAlchemy 2.0 · PostgreSQL(psycopg3) �
 |------|------|-----------|-------------|
 | 01 | member/member_profile 모델 + init_db 스키마 | — | |
 | 02 | member 데이터액세스 + Profile 어댑터(members.py) | 01 | |
-| 03 | bookmark 회원별 스키마 + 이관 함수 | 01 | |
 | 04 | 비밀번호 해싱 + authenticate_member(argon2id) | 02 | |
 | 05 | register/login/logout 라우트 + 세션 + require_login | 04 | Phase1 |
 | 06 | login/register 템플릿 + 네비 | 05 | Phase1 |
-| 07 | profile.yaml→영기 계정 시드 + 기존 북마크 이관 스크립트 | 03,04 | Phase1 |
+| 07 | profile.yaml→영기 계정 시드 | 04 | Phase1 |
 | 08 | 지역 정규화 유틸(area_nm 표본조사 + 예외맵) | 01 | Phase2 |
 | 09 | judge_rank 해당지역 1순위(거주지∪소득본거지) | 08 | Phase2 |
 | 10 | 프로필 입력/수정 폼 라우트+템플릿 | 06,07,09 | |
-| 11 | 회원별 대시보드 온더플라이 순위 + 관심지역 필터/전체보기 | 09,10 | |
-| 12 | 회원별 북마크 엔드포인트/목록 격리 | 03,11 | |
+| 12 | 북마크 회원별화(모델 복합PK + DB함수 + 이관 + app 엔드포인트) | 01,05,10 | |
+| 11 | 회원별 대시보드 온더플라이 순위 + 관심지역 필터/전체보기 | 09,10,12 | |
 
-- **Phase 0** = 01→02→03 (전부 선행, db.py/members.py 순차).
+> **계획 수리(2026-08-04):** 원안의 Task 03(bookmark 회원별 스키마)은 Phase 0에서 떼어
+> Task 12로 흡수했다. 이유: `src/web/app.py`가 `bookmarked_pblanc_nos()`/`add_bookmark(pblanc_no)`
+> 를 **전역 시그니처**로 호출하는데, 회원 범위(member_id)로 바꾸면 app.py의 현재-회원 개념
+> (=인증, Task 05)이 필요하다. 스키마 변경을 그 소비자(app.py)와 분리하면 Task 03~12 사이에
+> app.py가 깨지므로, 북마크 회원별화(모델+DB함수+이관+엔드포인트)를 인증 이후 Phase 3에서
+> **원자적으로** 처리한다. Task 07(시드)에서 북마크 이관도 제거 → Task 12로 이동.
+
+- **Phase 0** = 01→02 (member 스키마·어댑터. db.py/members.py 순차).
 - **Phase 1** (05,06,07) ∥ **Phase 2** (08,09): 파일 범위 disjoint(auth/템플릿/스크립트 vs scoring/regions) → 별도 세션 병렬 가능.
-- **Phase 3** = 10→11→12 (app.py 순차, Phase1·2 완료 후).
+- **Phase 3** = 10→12→11 (app.py 순차, Phase1·2 완료 후). 12(북마크 DB함수)가 11(대시보드 북마크 플래그)에 선행.

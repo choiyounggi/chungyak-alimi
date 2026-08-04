@@ -6,8 +6,10 @@ from datetime import date, datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     Integer,
     Numeric,
     String,
@@ -15,6 +17,7 @@ from sqlalchemy import (
     delete,
     func,
     select,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -166,6 +169,77 @@ class Bookmark(Base):
 
     pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Member(Base):
+    """회원 계정(멀티유저). email 로그인, 비밀번호는 argon2 해시(Task 04).
+
+    id 는 내부 전용 대리키(BIGINT identity) — URL/API 에 노출하지 않고, 리소스 접근은
+    항상 세션의 현재 회원 기준으로만 한다(D1). email 은 UNIQUE 자연키.
+    """
+
+    __tablename__ = "member"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MemberProfile(Base):
+    """회원별 리치 프로필(member 와 1:1, ON DELETE CASCADE). scoring.Profile 로 변환해
+    순위 판정에 사용한다(Task 02). 지역 목록은 파이썬(온더플라이)에서 매칭하므로 JSONB(D8)."""
+
+    __tablename__ = "member_profile"
+    __table_args__ = (
+        CheckConstraint(
+            "household_type IN ('newlywed','pre_newlywed','youth','general')",
+            name="ck_member_profile_household_type",
+        ),
+    )
+
+    member_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("member.id", ondelete="CASCADE"), primary_key=True
+    )
+    # 인적/세대
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    marriage_date: Mapped[date | None] = mapped_column(Date)
+    engaged: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_household_head: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    household_all_homeless: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    homeless_since: Mapped[date | None] = mapped_column(Date)
+    dependents: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    won_within_5y: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    children_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    real_estate_manwon: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    region: Mapped[str] = mapped_column(String, nullable=False, server_default=text("''"))
+    # 청약통장
+    account_opened: Mapped[date | None] = mapped_column(Date)
+    account_balance_manwon: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    # 소득(월평균/기준소득 미입력은 NULL)
+    income_monthly_manwon: Mapped[int | None] = mapped_column(Integer)
+    income_base_manwon: Mapped[int | None] = mapped_column(Integer)
+    income_dual: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # 생애최초
+    fl_ever_owned_house: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    fl_income_tax_5y: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    fl_currently_earning: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # 신규 필드
+    car_value_manwon: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    household_head_owns_home: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    household_type: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'general'"))
+    is_first_home: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    residence_regions: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    income_base_regions: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    interest_regions: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
 
 
 engine = create_engine(settings.database_url, future=True)
