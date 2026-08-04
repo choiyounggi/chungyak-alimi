@@ -6,11 +6,19 @@ Profile 에 없으므로 순위 로직이 MemberProfile 행에서 직접 읽는�
 """
 from __future__ import annotations
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import Member, MemberProfile
 from .scoring import AccountInfo, FirstLifeInfo, IncomeInfo, Profile
+
+# argon2-cffi 기본 파라미터(m=65536, t=3, p=4)는 OWASP 최소치(m=19456, t=2, p=1) 이상.
+_ph = PasswordHasher()
+
+# 비밀번호 길이 상한 — 메모리 하드 함수에 무제한 입력은 그 자체로 DoS.
+MAX_PASSWORD_LEN = 128
 
 # update_profile 로 갱신 허용하는 컬럼(화이트리스트). member_id/PK 는 제외.
 _UPDATABLE: frozenset[str] = frozenset(
@@ -32,6 +40,33 @@ _LIST_FIELDS: frozenset[str] = frozenset(
 
 def _norm_email(email: str) -> str:
     return (email or "").strip().lower()
+
+
+def hash_password(password: str) -> str:
+    """평문 → argon2id 해시(salt·파라미터는 해시 문자열에 포함). 128자 초과면 ValueError."""
+    if len(password) > MAX_PASSWORD_LEN:
+        raise ValueError(f"비밀번호는 {MAX_PASSWORD_LEN}자 이하여야 합니다")
+    return _ph.hash(password)
+
+
+def verify_password(hash_: str, password: str) -> bool:
+    try:
+        return _ph.verify(hash_, password)
+    except VerifyMismatchError:
+        return False
+
+
+# 계정이 없을 때도 같은 비용의 검증을 수행해, 응답 시간으로 이메일 존재 여부가 새지 않게 한다.
+_DUMMY_HASH = _ph.hash("chungyak-alimi-dummy-password")
+
+
+def authenticate_member(email: str, password: str, *, session: Session) -> Member | None:
+    """자격증명이 맞으면 Member, 아니면 None. 계정 부재도 더미 검증으로 타이밍을 은닉."""
+    m = get_member_by_email(email, session=session)
+    if m is None:
+        verify_password(_DUMMY_HASH, password)
+        return None
+    return m if verify_password(m.password_hash, password) else None
 
 
 def get_member_by_email(email: str, *, session: Session) -> Member | None:

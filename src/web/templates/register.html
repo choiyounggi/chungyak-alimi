@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}회원가입 · 청약 알리미{% endblock %}
+
+{% block head %}
+<style>
+  /* 로그인 페이지와 동일한 중앙 정렬 박스 */
+  body{min-height:100vh;display:flex;align-items:center;justify-content:center}
+  main.wrap{width:100%;max-width:380px;padding:24px 20px}
+  .login-head{text-align:center;margin-bottom:var(--s-lg)}
+  .login-head h1{color:var(--accent-teal)}
+  .form-error{display:flex;gap:var(--s-xs);align-items:center}
+  form .btn-primary{width:100%;margin-top:var(--s-xxs)}
+  /* 입력 규칙 안내(에러가 아니므로 danger 색을 쓰지 않는다) */
+  .field-hint{color:var(--muted);font-size:12.5px;margin-top:6px}
+  .form-foot{margin-top:var(--s-md);text-align:center;font-size:14px;color:var(--muted)}
+</style>
+{% endblock %}
+
+{% block topbar %}{% endblock %}
+
+{% block content %}
+<div class="login-head">
+  <h1>회원가입</h1>
+  <p class="sub">내 조건에 맞는 청약을 한눈에</p>
+</div>
+<!-- novalidate: 브라우저 기본 검증 팝업 대신 서버 인라인 에러로 안내 -->
+<form method="post" action="/register" novalidate>
+  {% if error %}
+  <!-- 서버가 정한 고정 문구만 표시(사용자 입력 반사 금지) -->
+  <div class="form-error" id="register-error" role="alert">
+    <svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg>{{ error }}
+  </div>
+  {% endif %}
+  <div class="field">
+    <label for="email">이메일</label>
+    <!-- 재렌더 시 입력값 보존(자동이스케이프로 출력) -->
+    <input id="email" name="email" type="email" autocomplete="email"
+           value="{{ email or '' }}" autofocus
+           {% if error %}aria-invalid="true" aria-describedby="register-error"{% endif %}>
+  </div>
+  <div class="field">
+    <label for="password">비밀번호</label>
+    <input id="password" name="password" type="password" autocomplete="new-password"
+           aria-describedby="password-hint{% if error %} register-error{% endif %}"
+           {% if error %}aria-invalid="true"{% endif %}>
+    <p class="field-hint" id="password-hint">128자 이하로 입력해주세요</p>
+  </div>
+  <button type="submit" class="btn btn-primary">회원가입</button>
+</form>
+<p class="form-foot">이미 계정이 있으신가요? <a href="/login">로그인</a></p>
+{% endblock %}

@@ -43,6 +43,12 @@
     color:var(--muted);padding:6px 12px;border-radius:var(--r-pill)}
   .topnav a:hover{color:var(--ink);background:var(--surface-soft)}
   .topnav .ic{width:16px;height:16px}
+  /* 로그아웃 POST 폼: 링크와 같은 모양이지만 동작은 button (상태 변경) */
+  .topnav .nav-form{display:flex;margin:0}
+  .topnav .nav-btn{border:none;background:none;cursor:pointer;font-family:inherit;
+    display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:700;
+    color:var(--muted);padding:6px 12px;border-radius:var(--r-pill)}
+  .topnav .nav-btn:hover{color:var(--ink);background:var(--surface-soft)}
 
   /* 카드 내부 공용 레이아웃(대시보드·북마크 페이지 공유) */
   .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
@@ -185,6 +191,16 @@
     <nav class="topnav">
       <a href="/">전체</a>
       <a href="/bookmarks"><svg class="ic"><use href="#i-bookmark"></use></svg> 북마크</a>
+      {# request 없이 직접 렌더하는 템플릿 테스트에서도 안전하도록 request 존재를 먼저 확인 #}
+      {% if request and request.session.get('member_id') %}
+      {# 로그아웃은 상태를 바꾸므로 링크가 아니라 POST 폼 + 실제 button #}
+      <form method="post" action="/logout" class="nav-form">
+        <button type="submit" class="nav-btn">로그아웃</button>
+      </form>
+      {% else %}
+      <a href="/login">로그인</a>
+      <a href="/register">회원가입</a>
+      {% endif %}
     </nav>
   </div></header>
   {% endblock %}

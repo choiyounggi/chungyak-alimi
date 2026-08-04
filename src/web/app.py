@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -27,6 +26,8 @@ from ..db import (
 )
 from ..filters import load_filter_config
 from ..scoring import judge_notice, load_profile
+from . import auth
+from .auth import require_login
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,8 @@ _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # 배치보다 웹이 먼저 재기동되는 배포에서도 스키마(my_rank 등)가 준비되도록 보장
 init_db()
+
+app.include_router(auth.router)
 
 # 특별공급 세대수 필드(raw) → 라벨
 SPECIAL_SUPPLY_LABELS = {
@@ -68,8 +71,8 @@ REGULATION_FLAGS = {
 
 if not settings.web_user or not settings.web_password:
     logger.warning(
-        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 대시보드가 인증 없이 노출됩니다. "
-        "외부 공개 시 반드시 설정하세요."
+        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 북마크 API/페이지가 인증 없이 "
+        "노출됩니다(대시보드는 회원 로그인으로 보호됨). 회원별 북마크 전환은 Task 12."
     )
 elif settings.session_secret == _DEFAULT_SESSION_SECRET:
     # 인증은 켰지만 세션 서명키가 기본값이면, 키를 아는 누구나 authed 쿠키를 위조해 우회 가능
@@ -86,48 +89,6 @@ def _auth_enabled() -> bool:
 def _authed(request: Request) -> bool:
     """인증이 꺼져있으면(로컬) 항상 통과, 켜져있으면 세션 로그인 여부."""
     return not _auth_enabled() or request.session.get("authed") is True
-
-
-@app.get("/login")
-def login_page(request: Request):
-    if _authed(request):
-        return RedirectResponse("/", status_code=303)
-    return _TEMPLATES.TemplateResponse(request, "login.html", {"errors": {}, "username": ""})
-
-
-@app.post("/login")
-def login_submit(
-    request: Request,
-    username: str = Form(""),
-    password: str = Form(""),
-):
-    errors: dict[str, str] = {}
-    if not username.strip():
-        errors["username"] = "아이디를 입력해주세요"
-    if not password:
-        errors["password"] = "비밀번호를 입력해주세요"
-    if not errors:
-        ok = bool(settings.web_user) and (
-            secrets.compare_digest(username, settings.web_user)
-            and secrets.compare_digest(password, settings.web_password)
-        )
-        if not ok:
-            errors["form"] = "아이디 또는 비밀번호가 올바르지 않습니다"
-    if errors:
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "login.html",
-            {"errors": errors, "username": username},
-            status_code=401,
-        )
-    request.session["authed"] = True
-    return RedirectResponse("/", status_code=303)
-
-
-@app.get("/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/login", status_code=303)
 
 
 def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
@@ -339,9 +300,7 @@ def notice_detail(pblanc_no: str, request: Request):
 
 
 @app.get("/")
-def index(request: Request):
-    if not _authed(request):
-        return RedirectResponse("/login", status_code=303)
+def index(request: Request, member_id: int = Depends(require_login)):
     cfg = load_filter_config()
     with SessionLocal() as session:
         items = matched_dashboard(session)
