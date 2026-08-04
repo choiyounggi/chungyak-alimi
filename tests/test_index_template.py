@@ -18,6 +18,10 @@ INDEX = TEMPLATES / "index.html"
 # 브리프 L50 — 정보행 아이콘 매핑(주소/접수/가격/면적/세대). 칩엔 아이콘 없음.
 INFO_ROW_ICONS = ["i-pin", "i-calendar", "i-won", "i-ruler", "i-building"]
 
+# D7의 닫힌 5종 공급기관. src.db.AGENCIES와 같은 값이어야 하지만, 이 파일은 DB 없이
+# 도는 순수 Jinja2 스모크라 상수를 재수입하지 않고 독립 어서션으로 둔다.
+AGENCIES = ("LH", "SH", "GH", "HUG", "기타")
+
 
 def _env() -> jinja2.Environment:
     # base.html을 함께 로드해야 extends가 해석됨.
@@ -36,6 +40,7 @@ def _notice(**over):
         rcept_bgnde="2026-08-01",
         rcept_endde="2026-08-05",
         tot_suply_hshldco=320,
+        agency="LH",
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -73,9 +78,13 @@ def _cfg(**over):
     return base
 
 
-def _render(items, cfg=None, today="2026-07-22", kakao_key="") -> str:
+def _render(items, cfg=None, today="2026-07-22", kakao_key="", agencies=AGENCIES) -> str:
     return _env().get_template("index.html").render(
-        items=items, cfg=cfg or _cfg(), today=today, kakao_key=kakao_key
+        items=items,
+        cfg=cfg or _cfg(),
+        today=today,
+        kakao_key=kakao_key,
+        agencies=agencies,
     )
 
 
@@ -111,7 +120,7 @@ def test_index_renders_normal_list():
     for icon in INFO_ROW_ICONS:
         assert f'href="#{icon}"' in out, f"정보행 아이콘 누락: {icon}"
     # 크림 푸터 문구
-    assert "공공 오픈API(청약홈/LH) 기반" in out
+    assert "공공 오픈API(청약홈·LH·마이홈·HUG) + 공식 포털(SH·GH) 기반" in out
     # 칩 필터 JS 보존(셀렉터·요소)
     assert "button.chip" in out
     assert 'getElementById("js-empty")' in out
@@ -124,7 +133,8 @@ def test_index_renders_empty_list():
     assert "조건에 맞는 진행·예정 공고가 없어요." in out
     assert 'class="card"' not in out
     assert 'id="js-empty"' in out  # JS 빈 상태 컨테이너는 항상 존재
-    assert "공공 오픈API(청약홈/LH) 기반" in out  # 푸터는 유지
+    # 푸터는 유지
+    assert "공공 오픈API(청약홈·LH·마이홈·HUG) + 공식 포털(SH·GH) 기반" in out
 
 
 # ── 경계값: dday 임계 경계(예정/임박/원거리)·price_lo 없음 ──
@@ -298,6 +308,48 @@ def test_map_js_absent_without_kakao_key():
     # 기존 칩 필터 JS는 그대로
     assert "button.chip" in out
     assert 'getElementById("js-empty")' in out
+
+
+# ── 기관 필터(D7/D21): 칩 5종이 기존 다중선택 칩 구조로 렌더 ──
+def test_agency_chips_rendered():
+    out = _render([_item()])
+    assert out.count('data-ftype="agency"') == len(AGENCIES) == 5
+    for a in AGENCIES:
+        assert f'data-ftype="agency" data-fval="{a}"' in out, f"기관 칩 누락: {a}"
+    # 기존 칩과 같은 토글 계약(button.chip + aria-pressed)
+    assert re.search(
+        r'<button type="button" class="chip" data-ftype="agency"[^>]*aria-pressed="false"',
+        out,
+    ), "기관 칩이 기존 다중선택 칩 구조를 따라야 함"
+
+
+# ── 기관 필터: 카드에 data-agency가 실려 JS가 재조회 없이 판정 가능 ──
+def test_card_has_agency_dataset():
+    out = _render([_item(notice=_notice(agency="SH"))])
+    assert 'data-agency="SH"' in out
+
+
+# ── 기관 배지: 카드에 기관명이 배지로 노출(자동이스케이프, |safe 금지) ──
+def test_agency_badge_rendered():
+    out = _render([_item(notice=_notice(agency="HUG"))])
+    assert 'class="badge badge--agency">HUG<' in out
+    assert ".badge--agency{" in out  # 페이지 로컬 스타일 존재
+
+
+# ── 경계값: agency 없음(None) → '기타'로 폴백, 예외 없음 ──
+def test_agency_none_falls_back_to_etc():
+    out = _render([_item(notice=_notice(agency=None))])
+    assert 'data-agency="기타"' in out
+    assert 'class="badge badge--agency">기타<' in out
+
+
+# ── 기관 필터 JS: 기존 matchesType에 agency 분기만 추가(재조회 없음 → 레이스 없음) ──
+def test_matches_type_handles_agency():
+    out = _render([_item()])
+    assert 'type === "agency"' in out
+    assert "card.dataset.agency" in out
+    # 기존 배선은 그대로(칩∩지도범위 결합 지점 유지)
+    assert "chungyakChipMatch" in out or "window.chungyakApplyList" in out
 
 
 # ── 경계: 지역/유형 미설정 시 '전국/전체 유형'이 고정 조건으로 표기 ──

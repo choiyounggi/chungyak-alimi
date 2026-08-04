@@ -237,11 +237,11 @@ def judge_first_life(p: Profile, today: date | None = None) -> dict:
 
 
 def judge_notice(notice, house_types, p: Profile, today: date | None = None) -> dict:
-    """공고 1건에 대한 종합 판정. 민영(청약홈)만 지원 — 공공/LH는 별도 기준(순차제)."""
+    """공고 1건에 대한 종합 판정. 민영(청약홈)만 지원 — 그 외 소스는 별도 기준(순차제)."""
     today = today or date.today()
     source = getattr(notice, "source", None) or (notice.raw or {}).get("_source")
     dtl = notice.house_dtl_secd_nm or ""
-    if source == "lh" or "민영" not in dtl:
+    if source != "applyhome" or "민영" not in dtl:
         return {
             "supported": False,
             "reason": "공공·국민주택은 별도 기준(납입액 순차제) — 판정 미지원",

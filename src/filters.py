@@ -24,6 +24,8 @@ class FilterConfig(BaseModel):
     min_households: int | None = None
     price_max_manwon: int | None = None
     exclude_keywords: list[str] = []
+    agencies: list[str] = []  # 공급기관 LH/SH/GH/HUG/기타. [] = 전체
+    rent_deposit_max_manwon: int | None = None  # 임대보증금 상한(만원). None = 제한없음
     only_open: bool = True  # 접수마감이 지난 공고 제외(미래/진행 청약만)
 
 
@@ -59,7 +61,7 @@ def _norm(s: str) -> str:
 def find_superseded(notices) -> dict[str, str]:
     """정정공고에 의해 대체된 공고를 찾는다 → {대체된 pblanc_no: 최신 pblanc_no}.
 
-    - 청약홈: 같은 주택관리번호(house_manage_no) 그룹에서 최신 공고만 남긴다.
+    - 주택관리번호(house_manage_no)가 있는 소스(청약홈·마이홈): 같은 번호 그룹에서 최신만 남긴다.
     - LH: 공고명에서 [정정공고] 접두사를 벗긴 이름이 같은 그룹. 동명이공고 오탐을
       막기 위해 그룹 안에 정정공고가 1건 이상 있을 때만 대체 처리한다.
     - 최신 판정: 공고일(없으면 게시일) → 정정 횟수(LH는 원본·정정의 공고일이 같은
@@ -68,10 +70,8 @@ def find_superseded(notices) -> dict[str, str]:
     groups: dict[str, list] = {}
     for n in notices:
         source = getattr(n, "source", None) or "applyhome"
-        if source == "applyhome":
-            if not n.house_manage_no:
-                continue
-            key = f"applyhome:hmn:{n.house_manage_no}"
+        if n.house_manage_no:
+            key = f"hmn:{n.house_manage_no}"
         else:
             base, _ = _strip_corrections(n.house_nm)
             if not base:
@@ -124,6 +124,16 @@ def match_notice(
 
     if cfg.supply_types and notice.house_dtl_secd_nm not in cfg.supply_types:
         fails.append(f"공급유형:{notice.house_dtl_secd_nm}")
+
+    agency = getattr(notice, "agency", None)
+    if cfg.agencies and agency not in cfg.agencies:
+        fails.append(f"기관:{agency}")
+
+    # 임대보증금 상한(원 단위 컬럼 vs 만원 단위 설정). 보증금 정보가 없으면(분양 등) 보류.
+    if cfg.rent_deposit_max_manwon is not None:
+        deposit = getattr(notice, "rent_gtn", None)
+        if deposit is not None and deposit > cfg.rent_deposit_max_manwon * 10000:
+            fails.append("임대보증금초과")
 
     if cfg.exclude_keywords and any(k in (notice.house_nm or "") for k in cfg.exclude_keywords):
         fails.append("제외키워드")

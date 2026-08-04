@@ -3,10 +3,12 @@
 # 빈 배열([]) 또는 null 은 "제한 없음"을 의미한다.
 
 regions: ["서울", "경기", "인천"]   # 관심 지역 (area_nm). [] = 전국
+agencies: []                       # 공급기관: [] = 전체(LH/SH/GH/HUG/기타)
 house_types: []                    # 주택유형: [] = 전체(모두)
 supply_types: []                   # 공급유형: [] = 전체(모두)
 special_supply: ["생애최초", "신혼부부"]  # 관심 특별공급
 min_households: null               # 총공급세대 하한: null = 제한없음
-price_max_manwon: 80000            # 분양가 상한(만원): 8억
-exclude_keywords: ["고령자", "실버", "영구임대", "국민임대"]  # 제외 키워드 — 연령제한(고령자·실버)·수급자(영구임대)·소득 70% 이하(국민임대)는 비해당 (2026-07-06)
+price_max_manwon: 80000            # 분양가 상한(만원): 8억 — 분양가 정보가 있는 공고에만 적용
+rent_deposit_max_manwon: null      # 임대보증금 상한(만원): null = 제한없음
+exclude_keywords: ["고령자", "실버"]  # 제외 키워드 — 연령제한(고령자·실버)만. 영구임대·국민임대는 2026-08-04 제거(임대 수집 확장)
 only_open: true                    # 접수마감 지난 공고 제외(미래/진행 청약만)

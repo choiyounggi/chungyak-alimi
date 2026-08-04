@@ -28,6 +28,9 @@
   .filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .filter-label{font-size:12px;font-weight:700;color:var(--muted);flex:none;margin-right:2px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
+  /* 카드 기관 배지(_macros.html 공용 매크로) — bookmarks.html에도 같은 규칙 존재 */
+  .badge--agency{display:inline-block;padding:1px 7px;border-radius:10px;
+    font-size:11px;font-weight:600;background:#eef4ff;color:#2b5fd9;margin-right:6px}
   /* .head-row/.head-actions/a.title/.row 카드 스타일은 base.html에 공용 정의됨 */
 </style>
 {% endblock %}
@@ -43,6 +46,9 @@
     <div class="filter-group">
       <span class="filter-label">필터 · 다중 선택</span>
       <div class="chips">
+        {% for a in agencies %}
+        <button type="button" class="chip" data-ftype="agency" data-fval="{{ a }}" aria-pressed="false">{{ a }}</button>
+        {% endfor %}
         {% for r in cfg.regions %}
         <button type="button" class="chip" data-ftype="area" data-fval="{{ r }}" aria-pressed="false">{{ r }}</button>
         {% endfor %}
@@ -97,7 +103,7 @@
 {% endblock %}
 
 {% block footer %}
-<footer class="footer">chungyak-alimi · 공공 오픈API(청약홈/LH) 기반</footer>
+<footer class="footer">chungyak-alimi · 공공 오픈API(청약홈·LH·마이홈·HUG) + 공식 포털(SH·GH) 기반</footer>
 {% endblock %}
 
 {% block scripts %}
@@ -111,6 +117,7 @@
   var active = {}; // { type: [선택된 값들] }
 
   function matchesType(card, type, vals) {
+    if (type === "agency") return vals.indexOf(card.dataset.agency) !== -1;
     if (type === "area") return vals.indexOf(card.dataset.area) !== -1;
     if (type === "rank") return vals.indexOf(card.dataset.rank) !== -1;
     if (type === "secd") return vals.indexOf(card.dataset.secd) !== -1;

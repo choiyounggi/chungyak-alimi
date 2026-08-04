@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -27,6 +28,26 @@ from .scoring import judge_notice, load_profile
 # 정정공고로 대체된 공고의 탈락 사유 접두사(뒤에 :최신공고번호)
 SUPERSEDED_REASON = "정정공고로 대체"
 
+# 공급기관 축(D7) — 닫힌 5종. 웹 필터 칩과 값을 공유한다.
+AGENCIES = ("LH", "SH", "GH", "HUG", "기타")
+
+# 수집원 → 기본 공급기관(D8). myhome 은 행마다 달라 모델이 agency 를 직접 싣는다.
+AGENCY_BY_SOURCE = {
+    "applyhome": "기타", "lh": "LH", "hug": "HUG", "sh": "SH", "gh": "GH",
+}
+
+
+def global_id(source: str, native: str) -> str:
+    """기관 간 공고번호 충돌을 막는 글로벌 ID(D1). 이미 접두된 값은 그대로 둔다.
+
+    판정은 `":" in native` 가 아니라 **자기 소스 접두사**로 한다 — 원본 ID 자체에
+    콜론이 들어오면 전자는 접두를 건너뛰어 서로 다른 소스가 같은 PK 로 충돌한다.
+    """
+    native = str(native)
+    prefix = f"{source}:"
+    return native if native.startswith(prefix) else prefix + native
+
+
 # ApplyhomeNotice → notice 테이블에 저장할 컬럼(공고 식별/일정/필터축)
 _COLS = (
     "pblanc_no",
@@ -47,6 +68,10 @@ _COLS = (
     "tot_suply_hshldco",
     "mvn_prearnge_ym",
     "pblanc_url",
+    "native_id",
+    "agency",
+    "rent_gtn",
+    "mt_rntchrg",
 )
 
 
@@ -60,6 +85,10 @@ class Notice(Base):
     pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
     house_manage_no: Mapped[str | None] = mapped_column(String)
     source: Mapped[str] = mapped_column(String, default="applyhome")
+    native_id: Mapped[str | None] = mapped_column(String)   # 소스 원본 공고번호(D2)
+    agency: Mapped[str | None] = mapped_column(String)      # 공급기관 LH/SH/GH/HUG/기타(D7)
+    rent_gtn: Mapped[int | None] = mapped_column(BigInteger)    # 임대보증금(원, D4)
+    mt_rntchrg: Mapped[int | None] = mapped_column(BigInteger)  # 월임대료(원, D4)
     house_nm: Mapped[str] = mapped_column(String)
     house_secd_nm: Mapped[str | None] = mapped_column(String)
     house_dtl_secd_nm: Mapped[str | None] = mapped_column(String)
@@ -148,6 +177,47 @@ def init_db() -> None:
     # 경량 마이그레이션: create_all은 기존 테이블에 컬럼을 추가하지 않는다
     with engine.begin() as conn:
         conn.exec_driver_sql("ALTER TABLE match_result ADD COLUMN IF NOT EXISTS my_rank VARCHAR")
+        for ddl in (
+            "ALTER TABLE notice ADD COLUMN IF NOT EXISTS native_id VARCHAR",
+            "ALTER TABLE notice ADD COLUMN IF NOT EXISTS agency VARCHAR",
+            "ALTER TABLE notice ADD COLUMN IF NOT EXISTS rent_gtn BIGINT",
+            "ALTER TABLE notice ADD COLUMN IF NOT EXISTS mt_rntchrg BIGINT",
+        ):
+            conn.exec_driver_sql(ddl)
+    migrate_global_ids()
+
+
+def migrate_global_ids() -> dict:
+    """pblanc_no 를 '<source>:<native>' 로 이관(D5·D6). 멱등 — 이미 접두된 행은 건너뛴다.
+
+    자식 테이블을 먼저 갱신한다. notice 를 먼저 바꾸면 조인 키가 사라진다.
+    반환: 테이블별 갱신 행 수.
+
+    LIKE 패턴의 `%` 는 `%%` 로 escape 한다 — exec_driver_sql 은 드라이버(psycopg)의
+    paramstyle 을 그대로 통과시켜 `%` 를 플레이스홀더로 해석한다.
+    """
+    counts: dict[str, int] = {}
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "UPDATE notice SET native_id = pblanc_no WHERE native_id IS NULL"
+        )
+        conn.exec_driver_sql(
+            "UPDATE notice SET agency = CASE source WHEN 'lh' THEN 'LH' ELSE '기타' END"
+            " WHERE agency IS NULL"
+        )
+        for table in ("notice_house_type", "match_result", "notify_log", "bookmark"):
+            r = conn.exec_driver_sql(
+                f"UPDATE {table} c SET pblanc_no = n.source || ':' || c.pblanc_no"
+                " FROM notice n WHERE n.pblanc_no = c.pblanc_no"
+                " AND c.pblanc_no NOT LIKE '%%:%%'"
+            )
+            counts[table] = r.rowcount
+        r = conn.exec_driver_sql(
+            "UPDATE notice SET pblanc_no = source || ':' || pblanc_no"
+            " WHERE pblanc_no NOT LIKE '%%:%%'"
+        )
+        counts["notice"] = r.rowcount
+    return counts
 
 
 @dataclass
@@ -165,7 +235,10 @@ class UpsertResult:
 
 
 def _to_row(n: ApplyhomeNotice, source: str) -> dict:
-    row = {c: getattr(n, c) for c in _COLS}
+    row = {c: getattr(n, c, None) for c in _COLS}
+    row["native_id"] = n.pblanc_no
+    row["pblanc_no"] = global_id(source, n.pblanc_no)
+    row["agency"] = getattr(n, "agency", None) or AGENCY_BY_SOURCE.get(source, "기타")
     row["raw"] = n.raw
     row["source"] = source
     return row
@@ -185,13 +258,13 @@ def upsert_notices(
         return UpsertResult()
 
     # 같은 배치 내 중복 공고번호 제거(마지막 유지) → ON CONFLICT 이중 반영 방지
-    deduped = {n.pblanc_no: n for n in notices}
+    deduped = {global_id(source, n.pblanc_no): n for n in notices}
     notices = list(deduped.values())
 
     own = session is None
     session = session or SessionLocal()
     try:
-        incoming = [n.pblanc_no for n in notices]
+        incoming = [global_id(source, n.pblanc_no) for n in notices]
         existing = {
             pid
             for (pid,) in session.execute(
@@ -219,6 +292,7 @@ def upsert_notices(
 def upsert_house_types(
     house_types: list[ApplyhomeHouseType],
     *,
+    source: str = "applyhome",
     session: Session | None = None,
 ) -> int:
     """주택형(면적·분양가)을 (pblanc_no, house_ty) 기준으로 upsert. 처리 건수를 반환."""
@@ -229,10 +303,11 @@ def upsert_house_types(
     session = session or SessionLocal()
     try:
         # 같은 배치 내 (pblanc_no, house_ty) 중복 제거(마지막 유지)
-        deduped = {(ht.pblanc_no, ht.house_ty): ht for ht in house_types}
+        deduped = {(global_id(source, ht.pblanc_no), ht.house_ty): ht for ht in house_types}
         rows = []
         for ht in deduped.values():
             row = {c: getattr(ht, c) for c in _HT_COLS}
+            row["pblanc_no"] = global_id(source, ht.pblanc_no)
             row["raw"] = ht.raw
             rows.append(row)
 

@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     # V-World 인증키(필지 폴리곤 조회, 서버측)
     vworld_key: str = ""
     vworld_domain: str = "https://chungyak.duckdns.org"
+    # HUG 든든전세 모집공고 오픈API 키(khug.or.kr 발급, data.go.kr 키와 다름)
+    hug_api_key: str = ""
 
 
 settings = Settings()

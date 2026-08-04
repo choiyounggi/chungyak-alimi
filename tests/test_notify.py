@@ -96,7 +96,8 @@ def test_format_judgment_line():
     from src.scoring import load_profile
 
     profile = load_profile("config/profile.example.yaml")
-    n = _notice(HOUSE_DTL_SECD_NM="민영")
+    # 판정은 청약홈 소스만 지원(D20) — DB Notice 는 source 컬럼, 픽스처는 raw['_source']
+    n = _notice(HOUSE_DTL_SECD_NM="민영", _source="applyhome")
     assert "🎯" in format_notice(n, [], profile=profile)
     assert "🎯" not in format_notice(n, [])  # 프로필 없음 → 기존 포맷 유지
 
@@ -160,7 +161,7 @@ def test_notify_new_matches_dedup(monkeypatch):
         s.commit()
         n = ApplyhomeNotice.model_validate({**SAMPLE, "PBLANC_NO": "N1", "HOUSE_MANAGE_NO": "N1"})
         upsert_notices([n], session=s)
-        save_match_results([("N1", True, [])], session=s)
+        save_match_results([("applyhome:N1", True, [])], session=s)
 
     calls = {"n": 0}
 

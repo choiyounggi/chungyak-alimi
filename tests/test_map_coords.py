@@ -98,13 +98,13 @@ def test_matched_dashboard_lat_lng_with_and_without_polygon(clean_db):
         ],
         session=s,
     )
-    save_match_results([("P1", True, []), ("P2", True, [])], session=s)
+    save_match_results([("applyhome:P1", True, []), ("applyhome:P2", True, [])], session=s)
 
     by_no = {it["notice"].pblanc_no: it for it in matched_dashboard(s)}
-    assert by_no["P1"]["lat"] == pytest.approx(37.61)
-    assert by_no["P1"]["lng"] == pytest.approx(126.71)
-    assert by_no["P2"]["lat"] is None  # 폴리곤 없음 → None (경계값)
-    assert by_no["P2"]["lng"] is None
+    assert by_no["applyhome:P1"]["lat"] == pytest.approx(37.61)
+    assert by_no["applyhome:P1"]["lng"] == pytest.approx(126.71)
+    assert by_no["applyhome:P2"]["lat"] is None  # 폴리곤 없음 → None (경계값)
+    assert by_no["applyhome:P2"]["lng"] is None
 
 
 @gated

@@ -8,8 +8,10 @@
      data-lat="{{ it.lat if it.lat is not none else '' }}"
      data-lng="{{ it.lng if it.lng is not none else '' }}"
      data-adres="{{ it.adres or '' }}"
+     data-agency="{{ n.agency or '기타' }}"
      data-title="{{ n.house_nm }}">
   <div class="head-row">
+    <span class="badge badge--agency">{{ n.agency or '기타' }}</span>
     <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
     <div class="head-actions">
       {% if it.dday is not none %}

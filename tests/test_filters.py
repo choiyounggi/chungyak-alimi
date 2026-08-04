@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
-from src.filters import FilterConfig, match_notice
+from src.filters import FilterConfig, find_superseded, load_filter_config, match_notice
 from src.models import ApplyhomeHouseType, ApplyhomeNotice
 
 from test_applyhome import SAMPLE
@@ -188,3 +189,100 @@ def test_exclude_keyword_gungmin_rental():
     public10 = _notice(HOUSE_NM="김포한강 10년 공공임대주택리츠 예비입주자 모집", SUBSCRPT_AREA_CODE_NM="경기")
     assert "제외키워드" not in match_notice(happy, [], cfg, today=TODAY)[1]
     assert "제외키워드" not in match_notice(public10, [], cfg, today=TODAY)[1]
+
+
+# ── 기관 필터(D19): [] = 전체 ──
+def test_agency_filter_passes_when_empty():
+    cfg = FilterConfig(agencies=[])
+    n = _notice(SUBSCRPT_AREA_CODE_NM="서울", agency="SH")
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is True
+    assert fails == []
+
+
+# ── 기관 필터: 목록에 없는 기관은 탈락 + 사유에 기관명 ──
+def test_agency_filter_rejects_other_agency():
+    cfg = FilterConfig(agencies=["LH"])
+    n = _notice(SUBSCRPT_AREA_CODE_NM="서울", agency="SH")
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is False
+    assert "기관:SH" in fails
+    # 같은 설정에서 LH 공고는 통과 (필터가 전량 탈락시키지 않음을 보장)
+    lh = _notice(SUBSCRPT_AREA_CODE_NM="서울", agency="LH")
+    assert match_notice(lh, [], cfg, today=TODAY) == (True, [])
+
+
+# ── 임대보증금 상한(D18): 원 단위 컬럼 vs 만원 단위 설정 ──
+def test_rent_deposit_over_limit_fails():
+    cfg = FilterConfig(rent_deposit_max_manwon=15000)  # 1.5억
+    n = _notice(SUBSCRPT_AREA_CODE_NM="서울", rent_gtn=200_000_000)  # 2억
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is False
+    assert "임대보증금초과" in fails
+
+
+# ── 임대보증금: 상한과 같으면 통과(경계값, inclusive) ──
+def test_rent_deposit_at_limit_passes():
+    cfg = FilterConfig(rent_deposit_max_manwon=15000)
+    n = _notice(SUBSCRPT_AREA_CODE_NM="서울", rent_gtn=150_000_000)
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is True
+    assert "임대보증금초과" not in fails
+    # 1원만 넘어도 탈락 (off-by-one)
+    over = _notice(SUBSCRPT_AREA_CODE_NM="서울", rent_gtn=150_000_001)
+    assert "임대보증금초과" in match_notice(over, [], cfg, today=TODAY)[1]
+
+
+# ── 임대보증금: 보증금 정보 없는 공고(분양 등)는 판정 보류 ──
+def test_rent_deposit_none_is_skipped():
+    cfg = FilterConfig(rent_deposit_max_manwon=15000)
+    n = _notice(SUBSCRPT_AREA_CODE_NM="서울", rent_gtn=None)
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert matched is True
+    assert "임대보증금초과" not in fails
+    # rent_gtn 속성 자체가 없는 모델(청약홈 등)도 동일하게 보류
+    bare = _notice(SUBSCRPT_AREA_CODE_NM="서울")
+    assert not hasattr(bare, "rent_gtn")
+    assert match_notice(bare, [], cfg, today=TODAY) == (True, [])
+
+
+# ── 임대 정책(D18): 기본 설정에서 영구임대·국민임대는 더 이상 제외키워드가 아니다 ──
+def test_public_rental_keyword_no_longer_excluded():
+    cfg = load_filter_config()  # config/filters.yaml 실제 로드
+    assert "국민임대" not in cfg.exclude_keywords
+    assert "영구임대" not in cfg.exclude_keywords
+    assert cfg.exclude_keywords == ["고령자", "실버"]  # 연령제한만 유지
+    n = _notice(HOUSE_NM="○○ 국민임대주택 예비입주자 모집", SUBSCRPT_AREA_CODE_NM="경기")
+    matched, fails = match_notice(n, [], cfg, today=TODAY)
+    assert "제외키워드" in match_notice(
+        _notice(HOUSE_NM="고령자복지주택 모집", SUBSCRPT_AREA_CODE_NM="경기"), [], cfg, today=TODAY
+    )[1]  # 고령자는 여전히 탈락 (필터가 꺼진 게 아님을 보장)
+    assert "제외키워드" not in fails
+    assert matched is True
+
+
+# ── 정정공고 대체(D25): 주택관리번호가 있으면 소스와 무관하게 같은 그룹 ──
+def _myhome(pblanc_no: str, hmn: str, name: str, pblanc_de: date):
+    return SimpleNamespace(
+        pblanc_no=pblanc_no,
+        source="myhome",
+        house_manage_no=hmn,
+        house_nm=name,
+        rcrit_pblanc_de=pblanc_de,
+        rcept_bgnde=None,
+    )
+
+
+def test_superseded_groups_by_house_manage_no_for_any_source():
+    # 공고명이 서로 달라 이름 기반 그룹으로는 묶이지 않는다 — 주택관리번호로만 묶여야 한다.
+    ns = [
+        _myhome("myhome:P1-1", "P1-1", "○○ 국민임대 입주자모집", date(2026, 6, 1)),
+        _myhome("myhome:P2-1", "P1-1", "[정정공고]○○ 국민임대 입주자모집(2차)", date(2026, 6, 10)),
+    ]
+    assert find_superseded(ns) == {"myhome:P1-1": "myhome:P2-1"}
+    # 주택관리번호가 다르면(형제 단지) 이름이 같아도 서로를 대체하지 않는다 — D27 경계
+    sib = [
+        _myhome("myhome:P1-1", "P1-1", "○○ 국민임대 입주자모집", date(2026, 6, 1)),
+        _myhome("myhome:P1-2", "P1-2", "○○ 국민임대 입주자모집", date(2026, 6, 1)),
+    ]
+    assert find_superseded(sib) == {}

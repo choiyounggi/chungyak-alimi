@@ -192,3 +192,16 @@ def test_load_profile_missing(tmp_path):
 def test_load_profile_example():
     p = load_profile("config/profile.example.yaml")
     assert p is not None and p.account.opened is not None
+
+
+# ── 종합: 청약홈 외 소스는 '민영'이어도 미지원 (D20) ──
+def test_non_applyhome_source_is_unsupported():
+    out = judge_notice(_notice(source="myhome", dtl="민영"), [], _profile(), today=TODAY)
+    assert out["supported"] is False
+    assert "판정 미지원" in out["reason"]
+
+
+# ── 종합: 청약홈 민영은 계속 지원 (회귀) ──
+def test_applyhome_private_still_supported():
+    out = judge_notice(_notice(source="applyhome", dtl="민영"), [_ht(84.9)], _profile(), today=TODAY)
+    assert out["supported"] is not False

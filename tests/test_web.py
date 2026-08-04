@@ -45,7 +45,7 @@ def seeded():
     ht = ApplyhomeHouseType.model_validate({**SAMPLE_HT, "PBLANC_NO": "W1"})
     upsert_notices([n], session=s)
     upsert_house_types([ht], session=s)
-    save_match_results([("W1", True, [])], session=s)
+    save_match_results([("applyhome:W1", True, [])], session=s)
     yield s
     for t in (MatchResult, NoticeHouseType, Notice):
         s.execute(delete(t))
@@ -58,7 +58,7 @@ def test_matched_dashboard(seeded):
     items = matched_dashboard(seeded)
     assert len(items) == 1
     it = items[0]
-    assert it["notice"].pblanc_no == "W1"
+    assert it["notice"].pblanc_no == "applyhome:W1"
     assert it["price_lo"] == 50724  # SAMPLE_HT LTTOT_TOP_AMOUNT
 
 
@@ -86,11 +86,11 @@ def test_dashboard_specials_from_name(seeded):
         {**SAMPLE, "PBLANC_NO": "W2", "HOUSE_MANAGE_NO": "W2", "HOUSE_NM": "행복 신혼희망타운"}
     )
     upsert_notices([n], session=seeded)
-    save_match_results([("W2", True, [])], session=seeded)
+    save_match_results([("applyhome:W2", True, [])], session=seeded)
     items = matched_dashboard(seeded)
     by_no = {it["notice"].pblanc_no: it for it in items}
-    assert by_no["W2"]["specials"] == ["신혼부부"]
-    assert by_no["W1"]["specials"] == []  # 특공 정보 없음 → 빈 목록 (경계값)
+    assert by_no["applyhome:W2"]["specials"] == ["신혼부부"]
+    assert by_no["applyhome:W1"]["specials"] == []  # 특공 정보 없음 → 빈 목록 (경계값)
 
 
 # ── 인덱스 렌더: 필터 칩(지역/특공) + 카드 data 속성 ──
@@ -106,7 +106,7 @@ def test_index_filter_chips(seeded):
 # ── 상세 페이지: 렌더 + 주택형/특공 표시 ──
 def test_detail_renders(seeded):
     client = TestClient(app)
-    r = client.get("/notice/W1")
+    r = client.get("/notice/applyhome:W1")
     assert r.status_code == 200
     assert SAMPLE["HOUSE_NM"] in r.text
     assert SAMPLE_HT["HOUSE_TY"] in r.text  # 주택형(055.9200A)
@@ -129,8 +129,8 @@ def test_detail_lh_images_and_files(seeded):
         }}
     )
     upsert_notices([n], source="lh", session=seeded)
-    save_match_results([("LHW1", True, [])], session=seeded)
-    r = TestClient(app).get("/notice/LHW1")
+    save_match_results([("lh:LHW1", True, [])], session=seeded)
+    r = TestClient(app).get("/notice/lh:LHW1")
     assert "단지 이미지" in r.text
     assert "lhImageView2.do?fileid=1" in r.text
     assert "단지조감도" in r.text
@@ -139,7 +139,7 @@ def test_detail_lh_images_and_files(seeded):
     assert 'id="lightbox"' in r.text
     assert "lb-prev" in r.text and "lb-next" in r.text
     # 이미지 없는 공고(W1)엔 갤러리·라이트박스 미노출 (경계값)
-    r2 = TestClient(app).get("/notice/W1")
+    r2 = TestClient(app).get("/notice/applyhome:W1")
     assert "단지 이미지" not in r2.text
     assert 'id="lightbox"' not in r2.text
 
@@ -199,7 +199,7 @@ def test_detail_map(seeded, monkeypatch):
     from src.web import app as webapp
 
     monkeypatch.setattr(webapp.settings, "kakao_js_key", "TESTKAKAOKEY")
-    r = TestClient(app).get("/notice/W1")
+    r = TestClient(app).get("/notice/applyhome:W1")
     assert 'id="map"' in r.text
     assert "dapi.kakao.com" in r.text
     assert "TESTKAKAOKEY" in r.text
@@ -216,5 +216,5 @@ def test_detail_no_map_without_key(seeded, monkeypatch):
     from src.web import app as webapp
 
     monkeypatch.setattr(webapp.settings, "kakao_js_key", "")
-    r = TestClient(app).get("/notice/W1")
+    r = TestClient(app).get("/notice/applyhome:W1")
     assert 'id="map"' not in r.text

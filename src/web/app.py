@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
 from ..db import (
+    AGENCIES,
     SUPERSEDED_REASON,
     Bookmark,
     MatchResult,
@@ -347,7 +348,13 @@ def index(request: Request):
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
-        {"items": items, "cfg": cfg, "today": date.today(), "kakao_key": settings.kakao_js_key},
+        {
+            "items": items,
+            "cfg": cfg,
+            "today": date.today(),
+            "kakao_key": settings.kakao_js_key,
+            "agencies": AGENCIES,
+        },
     )
 
 

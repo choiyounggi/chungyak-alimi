@@ -7,7 +7,11 @@ import sys
 from sqlalchemy import exists, select, update
 
 from .collectors.applyhome import fetch_apt_house_types, fetch_apt_notices
+from .collectors.gh import fetch_gh_notices
+from .collectors.hug import fetch_hug_notices
 from .collectors.lh import fetch_lh_detail, fetch_lh_notices, fetch_lh_supply
+from .collectors.myhome import fetch_myhome_notices
+from .collectors.sh import fetch_sh_notices
 from .collectors.vworld import fetch_parcel_polygon
 from .config import settings
 from .db import (
@@ -55,14 +59,14 @@ def enrich_lh_supply() -> int:
             r = n.raw or {}
             try:
                 supplies = fetch_lh_supply(
-                    pan_id=n.pblanc_no,
+                    pan_id=n.native_id or n.pblanc_no,
                     ccr=r.get("CCR_CNNT_SYS_DS_CD"),
                     spl=r.get("SPL_INF_TP_CD"),
                     upp=r.get("UPP_AIS_TP_CD"),
                     ais=r.get("AIS_TP_CD"),
                 )
                 if supplies:
-                    upsert_house_types(supplies, session=session)
+                    upsert_house_types(supplies, source="lh", session=session)
                     added += len(supplies)
             except Exception:
                 logger.exception("LH 공급정보 보강 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
@@ -123,7 +127,7 @@ def enrich_lh_detail() -> int:
                 continue
             try:
                 d = fetch_lh_detail(
-                    pan_id=n.pblanc_no,
+                    pan_id=n.native_id or n.pblanc_no,
                     ccr=r.get("CCR_CNNT_SYS_DS_CD"),
                     spl=r.get("SPL_INF_TP_CD"),
                     upp=r.get("UPP_AIS_TP_CD"),
@@ -148,9 +152,17 @@ def run_batch(*, notify: bool = True) -> dict:
     notices = _safe(fetch_apt_notices, "청약홈 공고 수집", [])
     house_types = _safe(fetch_apt_house_types, "청약홈 주택형 수집", [])
     lh_notices = _safe(fetch_lh_notices, "LH 공고 수집", [])
+    myhome_notices = _safe(fetch_myhome_notices, "마이홈 공고 수집", [])
+    hug_notices = _safe(fetch_hug_notices, "HUG 든든전세 수집", [])
+    sh_notices = _safe(fetch_sh_notices, "SH 공고 수집", [])
+    gh_notices = _safe(fetch_gh_notices, "GH 공고 수집", [])
     upsert_notices(notices, source="applyhome")
-    upsert_house_types(house_types)
+    upsert_house_types(house_types, source="applyhome")
     upsert_notices(lh_notices, source="lh")
+    upsert_notices(myhome_notices, source="myhome")
+    upsert_notices(hug_notices, source="hug")
+    upsert_notices(sh_notices, source="sh")
+    upsert_notices(gh_notices, source="gh")
     total, matched = evaluate_all(load_filter_config())
     # 보강 단계도 소스별 격리 — 외부 API 이상이 배치 전체를 중단하지 않게
     lh_enriched = _safe(enrich_lh_supply, "LH 공급정보 보강", 0)
@@ -161,6 +173,10 @@ def run_batch(*, notify: bool = True) -> dict:
         "collected": len(notices),
         "house_types": len(house_types),
         "lh_notices": len(lh_notices),
+        "myhome_notices": len(myhome_notices),
+        "hug_notices": len(hug_notices),
+        "sh_notices": len(sh_notices),
+        "gh_notices": len(gh_notices),
         "lh_enriched": lh_enriched,
         "lh_detailed": lh_detailed,
         "polygons": polygons,
@@ -179,10 +195,29 @@ def backfill_notified() -> int:
         return len(pending)
 
 
+class SecretRedactingFormatter(logging.Formatter):
+    """포맷된 로그 문자열에서 API 키를 가린다.
+
+    httpx 예외 메시지는 요청 URL을 쿼리스트링째 담는다
+    (`... for url '...?API_KEY=<키>'`). `_safe()` 가 이를 `logger.exception()` 으로
+    남기므로 traceback 까지 저널에 찍힌다 — logging.Filter 는 record 만 보고
+    traceback 문자열은 못 건드리므로, 최종 포맷 단계에서 지운다.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        out = super().format(record)
+        for secret in (settings.odcloud_api_key, settings.hug_api_key, settings.vworld_key):
+            if secret:  # 빈 문자열을 replace 하면 모든 문자 사이에 마스크가 끼어든다
+                out = out.replace(secret, "***")
+        return out
+
+
 def configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        SecretRedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     )
+    logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
     # httpx는 요청 URL 전체(쿼리스트링의 API 키 포함)를 INFO로 남기므로 저널 노출 차단
     logging.getLogger("httpx").setLevel(logging.WARNING)
 

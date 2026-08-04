@@ -136,10 +136,10 @@ def test_evaluate_all_marks_superseded():
     evaluate_all(FilterConfig(), today=date(2026, 7, 6))
 
     with SessionLocal() as s:
-        mr_orig = s.scalar(select(MatchResult).where(MatchResult.pblanc_no == "SUP1"))
-        mr_corr = s.scalar(select(MatchResult).where(MatchResult.pblanc_no == "SUP2"))
+        mr_orig = s.scalar(select(MatchResult).where(MatchResult.pblanc_no == "lh:SUP1"))
+        mr_corr = s.scalar(select(MatchResult).where(MatchResult.pblanc_no == "lh:SUP2"))
         assert mr_orig.matched is False
-        assert mr_orig.fail_reasons == [f"{SUPERSEDED_REASON}:SUP2"]
+        assert mr_orig.fail_reasons == [f"{SUPERSEDED_REASON}:lh:SUP2"]
         assert mr_corr.matched is True  # 빈 필터 → 정정공고는 정상 매칭
         for t in (NotifyLog, MatchResult, Notice):
             s.execute(delete(t))
