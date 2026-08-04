@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import logging
 import ssl
+import time
 
 import httpx
 
-from src.collectors.gh import GH_NOTICE_URL, GH_URL, _ssl_context, fetch_gh_notices
+from src.collectors.gh import (
+    GH_NOTICE_URL,
+    GH_URL,
+    INTERMEDIATE_CA,
+    _ssl_context,
+    fetch_gh_notices,
+)
 
 # 실측 카드 마크업(2026-08-04, apply.gh.or.kr) — 속성이 일부 깨진 원본 그대로 쓴다.
 REAL_CARD = """
@@ -161,3 +168,26 @@ def test_ssl_context_still_verifies_certificates():
     ctx = _ssl_context()
     assert ctx.verify_mode is ssl.CERT_REQUIRED
     assert ctx.check_hostname is True
+
+
+# ── 회귀: 서버가 빠뜨린 중간 인증서가 동봉돼 있어야 Linux 에서 검증이 통과한다 ──
+# macOS 는 AIA 자동조회로 통과해 이 결함이 안 보이고, 프로덕션(라즈베리파이)에서만
+# CERTIFICATE_VERIFY_FAILED 로 터졌다(2026-08-04).
+def test_intermediate_ca_bundled_and_unexpired():
+    assert INTERMEDIATE_CA.exists(), "중간 인증서 번들이 없다"
+    # truststore 가 ssl.create_default_context 를 패치해 get_ca_certs() 를 막으므로
+    # CPython 자체 테스트가 쓰는 디코더로 직접 읽는다.
+    cert = ssl._ssl._test_decode_cert(str(INTERMEDIATE_CA))
+    subject = str(cert["subject"])
+    assert "Sectigo RSA Organization" in subject, f"번들이 예상과 다르다: {subject}"
+    # 발급자가 시스템 신뢰저장소에 있는 루트여야 체인이 완성된다
+    assert "USERTrust RSA Certification Authority" in str(cert["issuer"])
+    # 만료되면 이 테스트가 실패한다 → gh.py 주석의 AIA URL 에서 재발급하라는 신호
+    assert ssl.cert_time_to_seconds(cert["notAfter"]) > time.time(), (
+        f"중간 인증서 만료({cert['notAfter']}) — AIA URL 에서 재발급할 것"
+    )
+
+
+def test_ssl_context_loads_without_error():
+    """번들 로딩이 컨텍스트 생성을 깨뜨리지 않는다(truststore/기본 양쪽)."""
+    assert _ssl_context().verify_mode is ssl.CERT_REQUIRED

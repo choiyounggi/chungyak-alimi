@@ -4,6 +4,7 @@ import html
 import logging
 import re
 import ssl
+from pathlib import Path
 from datetime import date
 
 import httpx
@@ -17,6 +18,11 @@ GH_NOTICE_URL = GH_URL
 # 주택이 아닌 공급유형은 수집 대상이 아니다(실측: "상가임대"가 섞여 있다).
 EXCLUDED_BIZ_TY = ("상가",)
 MAX_NAME_LEN = 200
+
+# 서버가 빠뜨린 중간 인증서(Sectigo RSA OV Secure Server CA, 만료 2030-12-31).
+# 갱신이 필요하면 leaf 의 AIA URL 에서 다시 받는다:
+#   http://crt.sectigo.com/SectigoRSAOrganizationValidationSecureServerCA.crt
+INTERMEDIATE_CA = Path(__file__).parent / "certs" / "sectigo_rsa_ov_ca.pem"
 
 # 대기열 호출문. 주석(`// NetFunnel_Action(`)은 비활성으로 본다.
 _NETFUNNEL_RE = re.compile(r"^\s*(?!//)\s*NetFunnel_Action\s*\(", re.M)
@@ -127,10 +133,13 @@ def _ssl_context() -> ssl.SSLContext:
     1) 서버가 forward secrecy 없는 RSA 키교환 암호(AES256-GCM-SHA384)만 제시한다.
        Python/OpenSSL 기본 암호 목록은 이를 거부해 handshake 가 실패하므로 그 한
        종류만 추가한다 — DEFAULT 강도와 인증서 검증은 그대로 둔다.
-    2) 인증서 체인이 certifi 번들만으로는 검증되지 않아 OS 신뢰저장소가 필요하다.
+    2) 서버가 **중간 인증서를 빼먹고 루트를 대신 보낸다**(체인 오구성).
+       macOS 는 AIA 로 누락분을 자동 조회해 통과하지만 Linux/OpenSSL 은 못 해
+       프로덕션(라즈베리파이)에서만 `CERTIFICATE_VERIFY_FAILED` 로 실패했다.
+       검증을 끄지 않고 빠진 조각(`certs/sectigo_rsa_ov_ca.pem`)만 공급한다 —
+       그 인증서 자체가 시스템 루트(USERTrust)로 검증되므로 위조본은 여전히 거부된다.
 
-    curl 은 두 조건을 기본으로 만족해 성공하므로, curl 로 되는데 httpx 로 안 되는
-    형태로 드러난다.
+    macOS 는 1)만, Linux 는 1)+2)가 필요하다. 한쪽에서만 검증하면 다른 쪽에서 깨진다.
     """
     try:
         import truststore
@@ -139,6 +148,8 @@ def _ssl_context() -> ssl.SSLContext:
     except ImportError:  # pragma: no cover — config.py 와 같은 best-effort 폴백
         ctx = ssl.create_default_context()
     ctx.set_ciphers("DEFAULT:AES256-GCM-SHA384")
+    if INTERMEDIATE_CA.exists():
+        ctx.load_verify_locations(cafile=str(INTERMEDIATE_CA))
     return ctx
 
 
