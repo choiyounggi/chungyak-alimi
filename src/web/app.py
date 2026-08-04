@@ -31,7 +31,7 @@ from ..filters import load_filter_config
 from ..members import get_profile, update_profile
 from ..scoring import judge_notice, load_profile
 from . import auth
-from .auth import require_login
+from .auth import current_member_id, require_login
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +75,8 @@ REGULATION_FLAGS = {
 
 if not settings.web_user or not settings.web_password:
     logger.warning(
-        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 북마크 API/페이지가 인증 없이 "
-        "노출됩니다(대시보드는 회원 로그인으로 보호됨). 회원별 북마크 전환은 Task 12."
+        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 공고 상세가 인증 없이 노출됩니다"
+        "(대시보드·북마크는 회원 로그인으로 보호됨)."
     )
 elif settings.session_secret == _DEFAULT_SESSION_SECRET:
     # 인증은 켰지만 세션 서명키가 기본값이면, 키를 아는 누구나 authed 쿠키를 위조해 우회 가능
@@ -129,10 +129,15 @@ def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
     }
 
 
-def matched_dashboard(session, today: date | None = None) -> list[dict]:
-    """매칭된(관심) 공고를 마감임박순으로, 분양가·면적·D-day 계산해 반환."""
+def matched_dashboard(
+    session, member_id: int | None = None, today: date | None = None
+) -> list[dict]:
+    """매칭된(관심) 공고를 마감임박순으로, 분양가·면적·D-day 계산해 반환.
+
+    북마크 플래그는 `member_id` 회원 기준. 회원이 없으면(비로그인 문맥) 북마크는 비어 있다.
+    """
     today = today or date.today()
-    bmarks = bookmarked_pblanc_nos(session=session)
+    bmarks = bookmarked_pblanc_nos(member_id, session=session) if member_id is not None else set()
     q = (
         select(Notice, MatchResult.my_rank)
         .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
@@ -149,12 +154,18 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
     return items
 
 
-def bookmarked_dashboard(session, today: date | None = None) -> list[dict]:
-    """북마크된 공고만(매칭 여부 무관) 최근 북마크순으로 반환."""
+def bookmarked_dashboard(session, member_id: int, today: date | None = None) -> list[dict]:
+    """그 회원이 북마크한 공고만(매칭 여부 무관) 최근 북마크순으로 반환.
+
+    소유 술어를 조인 조건에 실어 다른 회원 행은 애초에 결과에 들어오지 못하게 한다.
+    """
     today = today or date.today()
     q = (
         select(Notice, MatchResult.my_rank)
-        .join(Bookmark, Notice.pblanc_no == Bookmark.pblanc_no)
+        .join(
+            Bookmark,
+            (Notice.pblanc_no == Bookmark.pblanc_no) & (Bookmark.member_id == member_id),
+        )
         .outerjoin(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
         .order_by(Bookmark.created_at.desc())
     )
@@ -439,23 +450,29 @@ async def profile_submit(request: Request, member_id: int = Depends(require_logi
     return RedirectResponse("/profile?saved=1", status_code=303)
 
 
+def _api_member_id(request: Request) -> int:
+    """JSON API 용 로그인 게이트 — HTML 페이지의 303 과 달리 미로그인은 401(D15)."""
+    member_id = current_member_id(request)
+    if member_id is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    return member_id
+
+
 @app.put("/bookmark/{pblanc_no}")
 def bookmark_add(pblanc_no: str, request: Request) -> dict:
-    if not _authed(request):
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    member_id = _api_member_id(request)
     with SessionLocal() as session:
         if session.scalar(select(Notice.pblanc_no).where(Notice.pblanc_no == pblanc_no)) is None:
             raise HTTPException(status_code=404, detail="공고를 찾을 수 없습니다")
-        add_bookmark(pblanc_no, session=session)
+        add_bookmark(member_id, pblanc_no, session=session)
     return {"bookmarked": True}
 
 
 @app.delete("/bookmark/{pblanc_no}")
 def bookmark_remove(pblanc_no: str, request: Request) -> dict:
-    if not _authed(request):
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    member_id = _api_member_id(request)
     with SessionLocal() as session:
-        remove_bookmark(pblanc_no, session=session)
+        remove_bookmark(member_id, pblanc_no, session=session)
     return {"bookmarked": False}
 
 
@@ -475,7 +492,7 @@ def notice_detail(pblanc_no: str, request: Request):
 def index(request: Request, member_id: int = Depends(require_login)):
     cfg = load_filter_config()
     with SessionLocal() as session:
-        items = matched_dashboard(session)
+        items = matched_dashboard(session, member_id)
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -490,9 +507,7 @@ def index(request: Request, member_id: int = Depends(require_login)):
 
 
 @app.get("/bookmarks")
-def bookmarks_page(request: Request):
-    if not _authed(request):
-        return RedirectResponse("/login", status_code=303)
+def bookmarks_page(request: Request, member_id: int = Depends(require_login)):
     with SessionLocal() as session:
-        items = bookmarked_dashboard(session)
+        items = bookmarked_dashboard(session, member_id)
     return _TEMPLATES.TemplateResponse(request, "bookmarks.html", {"items": items})
