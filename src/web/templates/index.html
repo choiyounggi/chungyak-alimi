@@ -62,6 +62,17 @@
         <button type="button" class="chip" data-ftype="rank" data-fval="2순위" aria-pressed="false">2순위</button>
       </div>
     </div>
+    {# 관심지역: 서버가 카드마다 판정(data-interest)하고, 여기선 무엇으로 좁혔는지만 보여준다.
+       "전체 보기"는 순수 화면 상태라 서버 왕복 없이 클라이언트에서 토글한다(D20). #}
+    {% if interest_regions %}
+    <div class="filter-group">
+      <span class="filter-label">관심지역</span>
+      <div class="chips">
+        <span class="chip chip--info">{{ interest_regions|join(', ') }}</span>
+        <button type="button" class="chip" id="show-all-regions" aria-pressed="false">전체 보기</button>
+      </div>
+    </div>
+    {% endif %}
     <div class="filter-group">
       <span class="filter-label">고정 조건</span>
       <div class="chips">
@@ -115,6 +126,8 @@
   var countEl = document.querySelector(".count");
   var emptyEl = document.getElementById("js-empty");
   var active = {}; // { type: [선택된 값들] }
+  var showAllBtn = document.getElementById("show-all-regions");
+  var showAllRegions = false;   // "전체 보기" — 클라이언트 전용 화면 상태(서버 왕복 없음)
 
   function matchesType(card, type, vals) {
     if (type === "agency") return vals.indexOf(card.dataset.agency) !== -1;
@@ -132,6 +145,8 @@
   }
 
   function matches(card) {
+    // 관심지역 기본 필터: 칩/지도 필터와 AND로 결합된다.
+    if (!showAllRegions && card.dataset.interest === "0") return false;
     for (var type in active) {
       if (!active[type] || !active[type].length) continue;
       if (!matchesType(card, type, active[type])) return false; // 종류 간 AND
@@ -175,6 +190,18 @@
       apply();
     });
   });
+
+  if (showAllBtn) {
+    showAllBtn.addEventListener("click", function () {
+      showAllRegions = !showAllRegions;
+      showAllBtn.classList.toggle("active", showAllRegions);
+      showAllBtn.setAttribute("aria-pressed", showAllRegions ? "true" : "false");
+      apply();
+    });
+  }
+
+  // 관심지역 기본 필터를 첫 렌더에 반영한다(지도가 있으면 지도 스크립트가 범위까지 얹어 다시 부른다).
+  apply();
 })();
 </script>
 

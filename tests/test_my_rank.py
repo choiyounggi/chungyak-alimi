@@ -124,13 +124,29 @@ def test_dashboard_sorted_by_rank(session):
 
 # ── 인덱스 렌더: 순위 칩 + 카드 배지/속성 ──
 def test_index_rank_chip_and_badge(session):
-    from fastapi.testclient import TestClient
+    """인덱스의 순위는 저장값이 아니라 **로그인 회원 프로필**로 계산된다(Task 11, D17).
 
-    from src.web.app import app
+    그래서 여기선 배치 저장값 대신 회원 프로필(민영 공고 + 통장/예치금)로 1순위를 만든다.
+    """
+    from test_auth_routes import EMAIL, login_client
 
-    upsert_notices([_notice("S5")], session=session)
+    from src.members import get_member_by_email, update_profile
+
+    upsert_notices([_notice("S5", HOUSE_DTL_SECD_NM="민영")], session=session)
     save_match_results([("applyhome:S5", True, [], "1순위")], session=session)
-    r = TestClient(app).get("/")
+    client = login_client()
+    member = get_member_by_email(EMAIL, session=session)
+    update_profile(
+        member.id,
+        {
+            "region": "경기",
+            "account_opened": date(2010, 1, 1),
+            "account_balance_manwon": 5000,
+            "is_household_head": True,
+        },
+        session=session,
+    )
+    r = client.get("/")
     assert 'data-ftype="rank"' in r.text
     assert 'data-rank="1순위"' in r.text
     # 디자인 개편으로 이모지(🏅) 제거 — 순위 배지는 텍스트만 렌더한다

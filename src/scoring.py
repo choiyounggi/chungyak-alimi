@@ -6,6 +6,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
+from .regions import region_matches
+
 # ── 규칙 상수 (민영주택 기준, 2026-07 확인 — 제도 변경 시 여기만 수정) ──
 # 소득초과자 추첨제 부동산가액 상한(만원): 국토부 2021.11 개편(3억3,100만원)
 LOTTERY_ASSET_CAP_MANWON = 33_100
@@ -134,8 +136,24 @@ def _is_regulated(raw: dict) -> bool:
     return raw.get("MDAT_TRGET_AREA_SECD") not in (None, "", "N")
 
 
-def judge_rank(notice, house_types, p: Profile, today: date | None = None) -> dict:
-    """민영주택 1·2순위 판정. (통장 가입기간 + 예치금 + 규제지역 추가요건)"""
+def judge_rank(
+    notice,
+    house_types,
+    p: Profile,
+    today: date | None = None,
+    applicant_regions: list[str] | None = None,
+) -> dict:
+    """민영주택 1·2순위 판정. (통장 가입기간 + 예치금 + 규제지역 추가요건)
+
+    `applicant_regions`는 호출측이 구성한 **거주지 ∪ 소득본거지** 목록이다.
+    주어지면 공고 지역과 맞는지 판정해 `in_area`(True/False)를 함께 돌려주고,
+    None(기본)이면 지역 판정을 하지 않아 `in_area`는 None이 된다(하위호환).
+
+    정책(D19): 소득본거지를 해당지역으로 인정하는 것은 **사용자 지정 정책**이며
+    공식 청약 규칙이 아니다(공식 규칙은 원칙적으로 거주지 기준).
+    또한 지역은 1·2순위 요건이 아니므로 `in_area`는 `rank`에 영향을 주지 않는다.
+    "해당지역 1순위"는 `rank == "1순위" and in_area`로 표현한다.
+    """
     today = today or date.today()
     raw = notice.raw or {}
     regulated = _is_regulated(raw)
@@ -161,8 +179,16 @@ def judge_rank(notice, house_types, p: Profile, today: date | None = None) -> di
         if p.won_within_5y:
             reasons.append("규제지역: 5년 내 당첨 이력")
 
+    # 순위는 지역 사유가 붙기 전에 확정한다 — 기타지역이 2순위로 떨어뜨리면 안 된다.
     blocking = [r for r in reasons if not r.startswith("일부")]
-    return {"rank": "2순위" if blocking else "1순위", "regulated": regulated, "reasons": reasons}
+    rank = "2순위" if blocking else "1순위"
+
+    in_area: bool | None = None
+    if applicant_regions is not None:
+        in_area = region_matches(notice.area_nm, applicant_regions)
+        reasons.append("해당지역(거주지/소득본거지 매칭)" if in_area else "기타지역")
+
+    return {"rank": rank, "regulated": regulated, "reasons": reasons, "in_area": in_area}
 
 
 def _income_pct(p: Profile) -> float | None:

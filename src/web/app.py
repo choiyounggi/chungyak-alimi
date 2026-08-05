@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import date
 from pathlib import Path
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -17,6 +18,7 @@ from ..db import (
     SUPERSEDED_REASON,
     Bookmark,
     MatchResult,
+    MemberProfile,
     Notice,
     SessionLocal,
     add_bookmark,
@@ -26,7 +28,11 @@ from ..db import (
     remove_bookmark,
 )
 from ..filters import load_filter_config
-from ..scoring import judge_notice, load_profile
+from ..members import get_profile, profile_from_member, update_profile
+from ..regions import region_matches
+from ..scoring import judge_notice, judge_rank, load_profile
+from . import auth
+from .auth import current_member_id, require_login
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +50,8 @@ _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # 배치보다 웹이 먼저 재기동되는 배포에서도 스키마(my_rank 등)가 준비되도록 보장
 init_db()
+
+app.include_router(auth.router)
 
 # 특별공급 세대수 필드(raw) → 라벨
 SPECIAL_SUPPLY_LABELS = {
@@ -68,8 +76,8 @@ REGULATION_FLAGS = {
 
 if not settings.web_user or not settings.web_password:
     logger.warning(
-        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 대시보드가 인증 없이 노출됩니다. "
-        "외부 공개 시 반드시 설정하세요."
+        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 공고 상세가 인증 없이 노출됩니다"
+        "(대시보드·북마크는 회원 로그인으로 보호됨)."
     )
 elif settings.session_secret == _DEFAULT_SESSION_SECRET:
     # 인증은 켰지만 세션 서명키가 기본값이면, 키를 아는 누구나 authed 쿠키를 위조해 우회 가능
@@ -88,49 +96,16 @@ def _authed(request: Request) -> bool:
     return not _auth_enabled() or request.session.get("authed") is True
 
 
-@app.get("/login")
-def login_page(request: Request):
-    if _authed(request):
-        return RedirectResponse("/", status_code=303)
-    return _TEMPLATES.TemplateResponse(request, "login.html", {"errors": {}, "username": ""})
-
-
-@app.post("/login")
-def login_submit(
-    request: Request,
-    username: str = Form(""),
-    password: str = Form(""),
-):
-    errors: dict[str, str] = {}
-    if not username.strip():
-        errors["username"] = "아이디를 입력해주세요"
-    if not password:
-        errors["password"] = "비밀번호를 입력해주세요"
-    if not errors:
-        ok = bool(settings.web_user) and (
-            secrets.compare_digest(username, settings.web_user)
-            and secrets.compare_digest(password, settings.web_password)
-        )
-        if not ok:
-            errors["form"] = "아이디 또는 비밀번호가 올바르지 않습니다"
-    if errors:
-        return _TEMPLATES.TemplateResponse(
-            request,
-            "login.html",
-            {"errors": errors, "username": username},
-            status_code=401,
-        )
-    request.session["authed"] = True
-    return RedirectResponse("/", status_code=303)
-
-
-@app.get("/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/login", status_code=303)
-
-
-def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
+def _dashboard_item(
+    session,
+    n,
+    my_rank,
+    today: date,
+    bookmarked: bool,
+    *,
+    in_area: bool | None = None,
+    in_interest: bool = True,
+) -> dict:
     """공고 1건 → 카드용 dict(분양가·면적·D-day·좌표·특공·북마크). 대시보드/북마크 공용."""
     hts = house_types_of(n.pblanc_no, session=session)
     prices = [h.lttot_top_amount for h in hts if h.lttot_top_amount]
@@ -161,13 +136,22 @@ def _dashboard_item(session, n, my_rank, today: date, bookmarked: bool) -> dict:
         "deadline": deadline,
         "dday": (deadline - today).days if deadline else None,
         "bookmarked": bookmarked,
+        # 해당지역 여부(거주지 ∪ 소득본거지). 지역 판정을 하지 않은 문맥에선 None.
+        "in_area": in_area,
+        # 회원 관심지역에 드는가 — 관심지역 미입력이면 전부 True(폴백=전체).
+        "in_interest": in_interest,
     }
 
 
-def matched_dashboard(session, today: date | None = None) -> list[dict]:
-    """매칭된(관심) 공고를 마감임박순으로, 분양가·면적·D-day 계산해 반환."""
+def matched_dashboard(
+    session, member_id: int | None = None, today: date | None = None
+) -> list[dict]:
+    """매칭된(관심) 공고를 마감임박순으로, 분양가·면적·D-day 계산해 반환.
+
+    북마크 플래그는 `member_id` 회원 기준. 회원이 없으면(비로그인 문맥) 북마크는 비어 있다.
+    """
     today = today or date.today()
-    bmarks = bookmarked_pblanc_nos(session=session)
+    bmarks = bookmarked_pblanc_nos(member_id, session=session) if member_id is not None else set()
     q = (
         select(Notice, MatchResult.my_rank)
         .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
@@ -184,12 +168,78 @@ def matched_dashboard(session, today: date | None = None) -> list[dict]:
     return items
 
 
-def bookmarked_dashboard(session, today: date | None = None) -> list[dict]:
-    """북마크된 공고만(매칭 여부 무관) 최근 북마크순으로 반환."""
+def member_dashboard(session, member_id: int, today: date | None = None) -> list[dict]:
+    """매칭 공고를 **요청 시점에 그 회원 프로필로** 판정해 반환(D17 온더플라이).
+
+    배치가 저장한 `MatchResult.my_rank` 는 단일 사용자 시절의 값이라 쓰지 않는다.
+    해당지역은 거주지 ∪ 소득본거지로 판정하고(D18/D19), 순위와는 독립이다 —
+    "해당지역 1순위"는 `my_rank == "1순위" and in_area` 로 표현된다.
+    정렬: 해당지역 우선 → 1순위 → 2순위 → 판정불가 → 같은 그룹 안에선 마감임박순.
+    """
+    today = today or date.today()
+    prof = get_profile(member_id, session=session)
+    profile = profile_from_member(prof) if prof is not None else None
+    applicant_regions = (
+        list(prof.residence_regions or []) + list(prof.income_base_regions or [])
+        if prof is not None
+        else []
+    )
+    interest_regions = list(prof.interest_regions or []) if prof is not None else []
+    bmarks = bookmarked_pblanc_nos(member_id, session=session)
+
+    q = (
+        select(Notice)
+        .join(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
+        .where(MatchResult.matched.is_(True))
+        .order_by(Notice.rcept_endde)
+    )
+    items = []
+    for n in session.scalars(q).all():
+        hts = house_types_of(n.pblanc_no, session=session)
+        my_rank: str | None = None
+        # 지역 판정은 순위 지원 여부와 무관하다(공공 공고도 해당지역일 수 있다).
+        in_area = region_matches(n.area_nm, applicant_regions)
+        if profile is not None and judge_notice(n, hts, profile, today=today)["supported"]:
+            # supported 게이트는 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
+            judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
+            my_rank, in_area = judged["rank"], judged["in_area"]
+        items.append(
+            _dashboard_item(
+                session,
+                n,
+                my_rank,
+                today,
+                n.pblanc_no in bmarks,
+                in_area=in_area,
+                # 관심지역 미입력이면 필터하지 않는다(폴백=전체) — 빈 화면을 만들지 않는다.
+                in_interest=region_matches(n.area_nm, interest_regions)
+                if interest_regions
+                else True,
+            )
+        )
+    rank_order = {"1순위": 0, "2순위": 1}
+    items.sort(
+        key=lambda it: (
+            0 if it["in_area"] else 1,
+            rank_order.get(it["my_rank"], 2),
+            it["deadline"] or date.max,
+        )
+    )
+    return items
+
+
+def bookmarked_dashboard(session, member_id: int, today: date | None = None) -> list[dict]:
+    """그 회원이 북마크한 공고만(매칭 여부 무관) 최근 북마크순으로 반환.
+
+    소유 술어를 조인 조건에 실어 다른 회원 행은 애초에 결과에 들어오지 못하게 한다.
+    """
     today = today or date.today()
     q = (
         select(Notice, MatchResult.my_rank)
-        .join(Bookmark, Notice.pblanc_no == Bookmark.pblanc_no)
+        .join(
+            Bookmark,
+            (Notice.pblanc_no == Bookmark.pblanc_no) & (Bookmark.member_id == member_id),
+        )
         .outerjoin(MatchResult, Notice.pblanc_no == MatchResult.pblanc_no)
         .order_by(Bookmark.created_at.desc())
     )
@@ -301,28 +351,202 @@ def notice_detail_data(session, n) -> dict:
     }
 
 
+# ── 프로필 폼(Task 10) ────────────────────────────────────────────────────────
+
+# 세대유형 — DB CHECK 제약(ck_member_profile_household_type)과 같은 닫힌 4값(D7).
+HOUSEHOLD_TYPES: tuple[tuple[str, str], ...] = (
+    ("general", "일반"),
+    ("newlywed", "신혼부부"),
+    ("pre_newlywed", "예비신혼부부"),
+    ("youth", "청년"),
+)
+# 두 사람의 거주지·소득본거지를 함께 입력받아야 하는 세대유형
+COUPLE_HOUSEHOLD_TYPES: tuple[str, ...] = ("newlywed", "pre_newlywed")
+
+_DATE_FIELDS = frozenset({"birth_date", "marriage_date", "homeless_since", "account_opened"})
+_NUMBER_FIELDS = frozenset(
+    {
+        "dependents", "children_minor", "real_estate_manwon", "account_balance_manwon",
+        "income_monthly_manwon", "income_base_manwon", "car_value_manwon",
+    }
+)
+_REGION_FIELDS = frozenset({"residence_regions", "income_base_regions", "interest_regions"})
+
+
+def _blank_to(default):
+    """빈 문자열(미입력)을 그 필드의 '값 없음'으로 접는다 — 폼은 미입력도 ''로 보낸다."""
+
+    def convert(v):
+        return default if isinstance(v, str) and not v.strip() else v
+
+    return convert
+
+
+def _split_regions(v):
+    """콤마 구분 문자열 → list[str](공백 트림, 빈 항목 제거). 빈 입력은 []."""
+    if isinstance(v, str):
+        return [s.strip() for s in v.split(",") if s.strip()]
+    return v
+
+
+_OptDate = Annotated[date | None, BeforeValidator(_blank_to(None))]
+# ge 는 Optional 의 **안쪽 int** 에 붙여야 한다. Annotated[int | None, Field(ge=0)] 로 두면
+# 제약이 유니온 전체에 걸려 None 이 들어온 순간 `None >= 0` 으로 TypeError 가 난다.
+# 상한은 저장 컬럼(INTEGER)의 최대치 — 이걸 넘기면 검증을 통과하고도 INSERT 가 터진다.
+_INT_MAX = 2_147_483_647
+_NonNegInt = Annotated[int, Field(ge=0, le=_INT_MAX)]
+_Count = Annotated[_NonNegInt, BeforeValidator(_blank_to(0))]
+_OptCount = Annotated[_NonNegInt | None, BeforeValidator(_blank_to(None))]
+_Regions = Annotated[
+    list[Annotated[str, Field(max_length=50)]],
+    BeforeValidator(_split_regions),
+    Field(max_length=20),
+]
+
+
+class ProfileForm(BaseModel):
+    """프로필 폼의 신뢰 경계 검증 — 타입·범위·형식을 진입점에서 한 번만 본다(allowlist).
+
+    브라우저 쪽 검증은 UX 보조일 뿐이라 서버가 모든 제출을 다시 검증한다.
+    모델에 없는 키(폼이 끼워 넣은 member_id 등)는 무시한다 — 회원 식별자는 세션에서만 온다(D14).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    # 인적/세대
+    birth_date: _OptDate = None
+    marriage_date: _OptDate = None
+    engaged: bool = False
+    is_household_head: bool = False
+    household_all_homeless: bool = False
+    homeless_since: _OptDate = None
+    dependents: _Count = 0
+    won_within_5y: bool = False
+    children_minor: _Count = 0
+    real_estate_manwon: _Count = 0
+    region: str = Field("", max_length=50)
+    household_type: Literal["general", "newlywed", "pre_newlywed", "youth"] = "general"
+    household_head_owns_home: bool = False
+    car_value_manwon: _Count = 0
+    # 청약통장
+    account_opened: _OptDate = None
+    account_balance_manwon: _Count = 0
+    # 소득
+    income_monthly_manwon: _OptCount = None
+    income_base_manwon: _OptCount = None
+    income_dual: bool = False
+    # 생애최초
+    is_first_home: bool = False
+    fl_ever_owned_house: bool = False
+    fl_income_tax_5y: bool = False
+    fl_currently_earning: bool = False
+    # 지역(콤마 구분 입력)
+    residence_regions: _Regions = []
+    income_base_regions: _Regions = []
+    interest_regions: _Regions = []
+
+
+def _field_error(field: str) -> str:
+    """필드별 오류 문구 — '무엇이 틀렸나'가 아니라 '무엇을 하면 되나'를 적는다."""
+    if field in _DATE_FIELDS:
+        return "날짜를 YYYY-MM-DD 형식으로 입력해주세요"
+    if field in _NUMBER_FIELDS:
+        return f"0 이상의 숫자를 입력해주세요(최대 {_INT_MAX:,})"
+    if field == "household_type":
+        return "세대유형을 목록에서 선택해주세요"
+    if field in _REGION_FIELDS:
+        return "지역은 콤마로 구분해 20개까지, 각 50자 이내로 입력해주세요"
+    return "입력값을 확인해주세요"
+
+
+def _profile_form_values(prof: MemberProfile | None) -> dict:
+    """DB 행 → 폼 표시용 값(날짜/숫자는 문자열, 지역은 콤마 구분, 체크박스는 bool)."""
+    if prof is None:
+        return {"household_type": "general"}
+    values: dict = {}
+    for name in ProfileForm.model_fields:
+        v = getattr(prof, name)
+        if name in _REGION_FIELDS:
+            values[name] = ", ".join(v or [])
+        elif isinstance(v, bool):  # bool 은 int 의 하위형이라 숫자보다 먼저 본다
+            values[name] = v
+        elif v is None:
+            values[name] = ""
+        elif isinstance(v, date):
+            values[name] = v.isoformat()
+        else:
+            values[name] = str(v)
+    return values
+
+
+def _profile_context(values: dict, errors: dict, *, saved: bool = False) -> dict:
+    return {
+        "values": values,
+        "errors": errors,
+        "saved": saved,
+        "household_types": HOUSEHOLD_TYPES,
+        "couple_types": COUPLE_HOUSEHOLD_TYPES,
+    }
+
+
 @app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True}
 
 
+@app.get("/profile")
+def profile_page(request: Request, member_id: int = Depends(require_login)):
+    with SessionLocal() as session:
+        values = _profile_form_values(get_profile(member_id, session=session))
+    saved = request.query_params.get("saved") == "1"
+    return _TEMPLATES.TemplateResponse(
+        request, "profile.html", _profile_context(values, {}, saved=saved)
+    )
+
+
+@app.post("/profile")
+async def profile_submit(request: Request, member_id: int = Depends(require_login)):
+    form = dict(await request.form())
+    try:
+        data = ProfileForm.model_validate(form)
+    except ValidationError as exc:
+        # 오류를 필드로 되돌려 같은 슬롯에 인라인 표시하고, 입력값은 그대로 되살린다.
+        errors: dict[str, str] = {}
+        for err in exc.errors():
+            if err["loc"]:
+                field = str(err["loc"][0])
+                errors.setdefault(field, _field_error(field))
+        return _TEMPLATES.TemplateResponse(
+            request, "profile.html", _profile_context(form, errors), status_code=400
+        )
+    with SessionLocal() as session:
+        update_profile(member_id, data.model_dump(), session=session)
+    return RedirectResponse("/profile?saved=1", status_code=303)
+
+
+def _api_member_id(request: Request) -> int:
+    """JSON API 용 로그인 게이트 — HTML 페이지의 303 과 달리 미로그인은 401(D15)."""
+    member_id = current_member_id(request)
+    if member_id is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    return member_id
+
+
 @app.put("/bookmark/{pblanc_no}")
 def bookmark_add(pblanc_no: str, request: Request) -> dict:
-    if not _authed(request):
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    member_id = _api_member_id(request)
     with SessionLocal() as session:
         if session.scalar(select(Notice.pblanc_no).where(Notice.pblanc_no == pblanc_no)) is None:
             raise HTTPException(status_code=404, detail="공고를 찾을 수 없습니다")
-        add_bookmark(pblanc_no, session=session)
+        add_bookmark(member_id, pblanc_no, session=session)
     return {"bookmarked": True}
 
 
 @app.delete("/bookmark/{pblanc_no}")
 def bookmark_remove(pblanc_no: str, request: Request) -> dict:
-    if not _authed(request):
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    member_id = _api_member_id(request)
     with SessionLocal() as session:
-        remove_bookmark(pblanc_no, session=session)
+        remove_bookmark(member_id, pblanc_no, session=session)
     return {"bookmarked": False}
 
 
@@ -339,12 +563,12 @@ def notice_detail(pblanc_no: str, request: Request):
 
 
 @app.get("/")
-def index(request: Request):
-    if not _authed(request):
-        return RedirectResponse("/login", status_code=303)
+def index(request: Request, member_id: int = Depends(require_login)):
     cfg = load_filter_config()
     with SessionLocal() as session:
-        items = matched_dashboard(session)
+        items = member_dashboard(session, member_id)
+        prof = get_profile(member_id, session=session)
+        interest_regions = list(prof.interest_regions or []) if prof is not None else []
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -354,14 +578,13 @@ def index(request: Request):
             "today": date.today(),
             "kakao_key": settings.kakao_js_key,
             "agencies": AGENCIES,
+            "interest_regions": interest_regions,
         },
     )
 
 
 @app.get("/bookmarks")
-def bookmarks_page(request: Request):
-    if not _authed(request):
-        return RedirectResponse("/login", status_code=303)
+def bookmarks_page(request: Request, member_id: int = Depends(require_login)):
     with SessionLocal() as session:
-        items = bookmarked_dashboard(session)
+        items = bookmarked_dashboard(session, member_id)
     return _TEMPLATES.TemplateResponse(request, "bookmarks.html", {"items": items})

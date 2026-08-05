@@ -7,6 +7,8 @@ from sqlalchemy import delete, insert, select
 
 from src.db import (
     Bookmark,
+    Member,
+    MemberProfile,
     Notice,
     SessionLocal,
     engine,
@@ -15,6 +17,7 @@ from src.db import (
     migrate_global_ids,
     upsert_notices,
 )
+from src.members import create_member, hash_password
 from src.models import ApplyhomeNotice
 
 from test_applyhome import SAMPLE
@@ -51,6 +54,18 @@ def session():
     s.execute(delete(Bookmark))
     s.commit()
     s.close()
+
+
+@pytest.fixture
+def member_id(session):
+    """북마크는 회원 소유(복합 PK + member FK)라 이관 테스트에도 회원이 한 명 필요하다."""
+    for t in (MemberProfile, Member):
+        session.execute(delete(t))
+    session.commit()
+    yield create_member("db-migrate@example.com", hash_password("pw-12345"), session=session).id
+    for t in (MemberProfile, Member):
+        session.execute(delete(t))
+    session.commit()
 
 
 def _insert_native(session, pblanc_no: str, source: str = "applyhome") -> None:
@@ -118,9 +133,9 @@ def test_global_id_is_idempotent():
 
 
 # ── 정상: 이관이 notice 와 자식 행을 함께 옮긴다(북마크 유지) ──
-def test_migrate_moves_child_rows(session):
+def test_migrate_moves_child_rows(session, member_id):
     _insert_native(session, "M1")
-    session.execute(insert(Bookmark).values(pblanc_no="M1"))
+    session.execute(insert(Bookmark).values(member_id=member_id, pblanc_no="M1"))
     session.commit()
 
     counts = migrate_global_ids()
@@ -133,9 +148,9 @@ def test_migrate_moves_child_rows(session):
 
 
 # ── 경계: 두 번 실행해도 결과가 같다(멱등) ──
-def test_migrate_twice_is_noop(session):
+def test_migrate_twice_is_noop(session, member_id):
     _insert_native(session, "M2")
-    session.execute(insert(Bookmark).values(pblanc_no="M2"))
+    session.execute(insert(Bookmark).values(member_id=member_id, pblanc_no="M2"))
     session.commit()
     migrate_global_ids()
 
@@ -149,8 +164,8 @@ def test_migrate_twice_is_noop(session):
 
 
 # ── 에러/경계: notice 에 짝이 없는 고아 자식 행은 그대로 남는다(예외 없음) ──
-def test_migrate_keeps_orphan_child(session):
-    session.execute(insert(Bookmark).values(pblanc_no="ORPHAN"))
+def test_migrate_keeps_orphan_child(session, member_id):
+    session.execute(insert(Bookmark).values(member_id=member_id, pblanc_no="ORPHAN"))
     session.commit()
 
     counts = migrate_global_ids()
