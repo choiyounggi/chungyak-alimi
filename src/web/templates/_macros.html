@@ -1,3 +1,51 @@
+{# 비밀번호 입력 + 마스킹 토글(register·login 공용).
+   messages 가 있으면 profile.html 과 같은 필드 에러 마크업(.field.has-error / input.invalid /
+   #e-<name>)을 쓴다. 비밀번호는 재표시하지 않으므로 value 속성을 절대 내보내지 않는다. #}
+{% macro password_field(name, label, autocomplete, messages=[], hint_id='', form_error_id='') %}
+{% set ids = [] %}
+{% if messages %}{% set _ = ids.append('e-' ~ name) %}{% endif %}
+{% if hint_id %}{% set _ = ids.append(hint_id) %}{% endif %}
+{% if form_error_id %}{% set _ = ids.append(form_error_id) %}{% endif %}
+<div class="field{{ ' has-error' if messages else '' }}">
+  <label for="{{ name }}">{{ label }}</label>
+  <div class="pw-wrap">
+    <input id="{{ name }}" name="{{ name }}" type="password" autocomplete="{{ autocomplete }}"
+           {% if messages %}class="invalid" {% endif %}{% if messages or form_error_id %}aria-invalid="true" {% endif %}{% if ids %}aria-describedby="{{ ids|join(' ') }}"{% endif %}>
+    {# 상태 토글이므로 링크가 아니라 실제 button + aria-pressed. 아이콘 전용이라 aria-label 필수. #}
+    <button type="button" class="pw-toggle" aria-controls="{{ name }}"
+            aria-pressed="false" aria-label="비밀번호 표시">
+      <svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>
+    </button>
+  </div>
+  {% if messages %}
+  <ul class="field-error" id="e-{{ name }}">{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+  {# {% call %} 로 부르면 힌트·규칙 체크리스트가 같은 .field 안에 들어온다(간격 일관) #}
+  {% if caller %}{{ caller() }}{% endif %}
+</div>
+{% endmacro %}
+
+{# 마스킹 토글 JS. input.type 과 속성만 바꾼다 — 문자열 HTML 조립 금지, 값은 건드리지 않는다.
+   JS 가 없으면 버튼은 아무 일도 하지 않고 폼은 masked 상태 그대로 정상 제출된다(점진적 향상). #}
+{% macro password_toggle_script() %}
+<script>
+(function () {
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".pw-toggle");
+    if (!btn) return;
+    var input = document.getElementById(btn.getAttribute("aria-controls"));
+    if (!input) return;
+    var show = btn.getAttribute("aria-pressed") !== "true";
+    input.type = show ? "text" : "password";
+    btn.setAttribute("aria-pressed", show ? "true" : "false");
+    btn.setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 표시");
+    var use = btn.querySelector("use");
+    if (use) use.setAttribute("href", show ? "#i-eye-off" : "#i-eye");
+  });
+})();
+</script>
+{% endmacro %}
+
 {# 공고 카드(대시보드·북마크 페이지 공용). it = app.py _dashboard_item dict. #}
 {% macro notice_card(it) %}
 {% set n = it.notice %}

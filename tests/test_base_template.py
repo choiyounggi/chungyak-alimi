@@ -15,11 +15,13 @@ import pytest
 TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "web" / "templates"
 BASE = TEMPLATES / "base.html"
 
-# 브리프 [SVG 아이콘 스프라이트] — 다운스트림이 참조하는 18개 id 전부.
+# 브리프 [SVG 아이콘 스프라이트] — 다운스트림이 참조하는 id 전부.
+# i-eye / i-eye-off 는 비밀번호 마스킹 토글용(Task 04).
 ICON_IDS = [
     "i-pin", "i-calendar", "i-won", "i-home", "i-award", "i-doc", "i-clip",
     "i-image", "i-map", "i-search", "i-target", "i-arrow-left", "i-arrow-right",
     "i-gift", "i-building", "i-ruler", "i-clock", "i-alert", "i-bookmark",
+    "i-eye", "i-eye-off",
 ]
 
 # 브리프 [색상/라운드/간격/폰트] — :root 토큰 정의(선언부, `--name:` 형태로 존재 검증).
@@ -48,6 +50,7 @@ REQUIRED_SELECTORS = [
     ".table",
     "label", "input", "input:focus", "input.invalid",
     ".field", ".field-error", ".field.has-error .field-error", ".form-error",
+    ".pw-wrap", ".pw-toggle",
     ".footer", ".empty", ".ic", ".muted", ".sub", ".display",
     ".topnav", ".bookmark-btn", ".bookmark-btn.is-on",
     ".head-row", ".head-actions", "a.title", ".row",
@@ -105,11 +108,11 @@ def test_base_defines_every_icon_symbol(icon_id):
     assert 'stroke-width="1.8"' in tag, f"{icon_id}: stroke-width 1.8 아님"
 
 
-# ── 정상: symbol 정확히 19개(누락·초과 방지) ──
-def test_base_has_exactly_19_symbols():
+# ── 정상: symbol 정확히 21개(누락·초과 방지) ──
+def test_base_has_exactly_21_symbols():
     out = _env().get_template("base.html").render()
     symbols = re.findall(r'<symbol\b', out)
-    assert len(symbols) == len(ICON_IDS) == 19, f"symbol 개수 불일치: {len(symbols)}"
+    assert len(symbols) == len(ICON_IDS) == 21, f"symbol 개수 불일치: {len(symbols)}"
 
 
 # ── 정상: 상단 내비(전체/북마크) + 북마크 토글 JS 계약 ──

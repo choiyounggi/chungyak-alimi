@@ -41,7 +41,8 @@ from test_housetype import SAMPLE_HT
 
 EMAIL_A = "bookmark-a@example.com"
 EMAIL_B = "bookmark-b@example.com"
-PASSWORD = "pw-12345"
+# 가입 경계가 KISA 정책을 강제하므로(Task 04) 픽스처 비밀번호도 정책을 통과해야 한다.
+PASSWORD = "Vu8#mQ2rTz"
 
 
 def _db_available() -> bool:

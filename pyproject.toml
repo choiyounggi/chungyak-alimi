@@ -5,7 +5,8 @@ description = "공공 오픈API 기반 청약 정보 수집·정제·알림·조
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",
-    "pydantic>=2.7",
+    # [email] extra = email-validator. 가입 폼의 EmailStr 검증에 필요하다(E1/E3).
+    "pydantic[email]>=2.7",
     "pydantic-settings>=2.3",
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",

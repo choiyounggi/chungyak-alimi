@@ -26,7 +26,8 @@ from src.web.app import app
 from test_auth_routes import BASE_URL, login_client
 
 EMAIL = "profile-tester@example.com"
-PASSWORD = "pw-12345"
+# 가입 경계가 KISA 정책을 강제하므로(Task 04) 픽스처 비밀번호도 정책을 통과해야 한다.
+PASSWORD = "Vu8#mQ2rTz"
 OTHER_EMAIL = "profile-other@example.com"
 
 # 체크박스는 **체크된 것만** 전송된다(미체크 = 키 자체가 없음) — 브라우저 폼과 동일하게 구성.

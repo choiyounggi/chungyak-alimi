@@ -14,7 +14,9 @@ from src.db import Member, MemberProfile, SessionLocal, engine, init_db
 from src.web.app import app
 
 EMAIL = "tester@example.com"
-PASSWORD = "pw-12345"
+# 가입 경계가 KISA 정책을 강제하므로(Task 04) 픽스처 비밀번호도 정책을 통과해야 한다.
+# 구 값 "pw-12345"는 연속 3자(123)·키보드 3자(qwe/asd 계열)에 걸려 더는 가입되지 않는다.
+PASSWORD = "Vu8#mQ2rTz"
 
 # 세션 쿠키의 Secure 는 설정 구동(SESSION_HTTPS_ONLY)이다. Secure 쿠키는 http 응답에서
 # 쿠키 저장소에 담기지 않으므로, 설정값에 맞춰 스킴을 골라야 어느 환경에서도 왕복한다.
@@ -56,7 +58,9 @@ def login_client(email: str = EMAIL, password: str = PASSWORD) -> TestClient:
     """회원가입(이미 있으면 로그인)으로 세션 쿠키를 확보한 TestClient — 보호 라우트 테스트용."""
     client = _client()
     r = client.post(
-        "/register", data={"email": email, "password": password}, follow_redirects=False
+        "/register",
+        data={"email": email, "password": password, "password2": password},
+        follow_redirects=False,
     )
     if r.status_code == 409:  # 앞선 테스트가 만들어둔 계정 → 로그인으로 대체
         r = client.post(
@@ -73,10 +77,13 @@ def test_register_logs_in_and_grants_access_to_protected_route(clean_members):
     client = _client()
 
     r = client.post(
-        "/register", data={"email": EMAIL, "password": PASSWORD}, follow_redirects=False
+        "/register",
+        data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD},
+        follow_redirects=False,
     )
     assert r.status_code == 303
-    assert r.headers["location"] == "/"
+    # 가입 성공은 3스텝 온보딩으로 이어진다(Task 04 → Task 05)
+    assert r.headers["location"] == "/onboarding/1"
 
     # 가입 직후 세션 쿠키만으로 대시보드 접근
     dash = client.get("/", follow_redirects=False)
@@ -84,7 +91,9 @@ def test_register_logs_in_and_grants_access_to_protected_route(clean_members):
 
 
 def test_login_after_register_grants_access(clean_members):
-    _client().post("/register", data={"email": EMAIL, "password": PASSWORD})
+    _client().post(
+        "/register", data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD}
+    )
 
     client = _client()  # 쿠키 없는 새 클라이언트
     r = client.post(
@@ -96,7 +105,10 @@ def test_login_after_register_grants_access(clean_members):
 
 def test_login_is_case_insensitive_for_email(clean_members):
     """경계: 대문자로 가입해도 소문자 이메일로 로그인된다(정규화)."""
-    _client().post("/register", data={"email": "Mixed@Example.COM", "password": PASSWORD})
+    _client().post(
+        "/register",
+        data={"email": "Mixed@Example.COM", "password": PASSWORD, "password2": PASSWORD},
+    )
 
     client = _client()
     r = client.post(
@@ -110,10 +122,14 @@ def test_login_is_case_insensitive_for_email(clean_members):
 
 
 def test_duplicate_register_returns_409(clean_members):
-    _client().post("/register", data={"email": EMAIL, "password": PASSWORD})
+    _client().post(
+        "/register", data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD}
+    )
 
     r = _client().post(
-        "/register", data={"email": EMAIL, "password": PASSWORD}, follow_redirects=False
+        "/register",
+        data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD},
+        follow_redirects=False,
     )
     assert r.status_code == 409
     assert "이미 가입된 이메일입니다" in r.text
@@ -126,7 +142,9 @@ def test_duplicate_register_returns_409(clean_members):
 
 
 def test_login_with_wrong_password_returns_401(clean_members):
-    _client().post("/register", data={"email": EMAIL, "password": PASSWORD})
+    _client().post(
+        "/register", data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD}
+    )
 
     client = _client()
     r = client.post(
@@ -174,10 +192,11 @@ def test_logout_clears_session_and_reblocks_protected_route(clean_members):
 @pytest.mark.parametrize(
     "payload",
     [
-        {"email": "", "password": PASSWORD},          # 빈 이메일
-        {"email": EMAIL, "password": ""},             # 빈 비밀번호
-        {"email": "not-an-email", "password": PASSWORD},  # 형식 위반
-        {"email": EMAIL, "password": "a" * 129},      # 길이 상한 초과
+        # password2 는 일치시켜 둔다 — 400의 원인이 확인 불일치가 아니라 각 주석의 사유임을 못 박는다
+        {"email": "", "password": PASSWORD, "password2": PASSWORD},              # 빈 이메일
+        {"email": EMAIL, "password": "", "password2": ""},                       # 빈 비밀번호
+        {"email": "not-an-email", "password": PASSWORD, "password2": PASSWORD},  # 형식 위반
+        {"email": EMAIL, "password": "a" * 129, "password2": "a" * 129},         # 길이 상한 초과
     ],
 )
 def test_register_rejects_invalid_input(clean_members, payload):
@@ -213,7 +232,9 @@ def test_login_and_register_pages_render(clean_members):
 def test_session_cookie_is_httponly_secure_samesite_lax(clean_members):
     """세션 쿠키는 JS 접근 불가(httponly) + SameSite=Lax 이고, Secure 는 설정과 일치해야 한다."""
     r = _client().post(
-        "/register", data={"email": EMAIL, "password": PASSWORD}, follow_redirects=False
+        "/register",
+        data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD},
+        follow_redirects=False,
     )
 
     set_cookie = r.headers["set-cookie"].lower()
