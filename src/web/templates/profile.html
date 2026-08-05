@@ -23,28 +23,9 @@
 {% endblock %}
 
 {% block content %}
-{# 텍스트/숫자/날짜 필드 — 오류는 필드 바로 아래 같은 슬롯에 인라인 표시(aria로 연결) #}
-{% macro field(name, label, type="text", placeholder="", suffix="") %}
-<div class="field{{ ' has-error' if errors.get(name) else '' }}">
-  <label for="f-{{ name }}">{{ label }}{% if suffix %} <span class="muted">({{ suffix }})</span>{% endif %}</label>
-  <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}"
-         value="{{ values.get(name, '') }}"
-         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
-         {% if type == 'number' %}min="0" inputmode="numeric"{% endif %}
-         class="{{ 'invalid' if errors.get(name) else '' }}"
-         {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
-  <p class="field-error" id="e-{{ name }}">{{ errors.get(name, '') }}</p>
-</div>
-{% endmacro %}
-
-{# 체크박스 — 미체크면 브라우저가 전송하지 않으므로 서버 기본값 False 와 의미가 같다 #}
-{% macro check(name, label) %}
-<div class="check">
-  <input id="f-{{ name }}" name="{{ name }}" type="checkbox" value="on"
-         {{ 'checked' if values.get(name) else '' }}>
-  <label for="f-{{ name }}">{{ label }}</label>
-</div>
-{% endmacro %}
+{# field/check 는 온보딩 폼과 공유하려고 _macros.html 로 승격했다.
+   두 매크로가 ambient 컨텍스트(values/errors)를 읽으므로 `with context` 가 필수다. #}
+{% from "_macros.html" import field, check with context %}
 
 <div class="head" style="margin:6px 0 14px">
   <h1>내 프로필</h1>
