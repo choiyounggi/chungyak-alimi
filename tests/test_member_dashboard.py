@@ -39,7 +39,8 @@ from fastapi.testclient import TestClient  # noqa: E402  (테스트 헬퍼 뒤 �
 
 TODAY = date(2026, 7, 7)
 EMAIL = "dashboard-member@example.com"
-PASSWORD = "pw-12345"
+# 가입 경계가 KISA 정책을 강제하므로(Task 04) 픽스처 비밀번호도 정책을 통과해야 한다.
+PASSWORD = "Vu8#mQ2rTz"
 
 # 1순위가 나오는 프로필: 통장 16년(수도권 비규제 요건 1년) + 예치금 충분 + 세대주.
 RANK1_PROFILE = {

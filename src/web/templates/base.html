@@ -132,6 +132,15 @@
   .field.has-error .field-error{display:block}
   .form-error{background:#FDECEC;color:var(--danger);border-radius:var(--r-md);padding:11px 13px;
     font-size:13.5px;font-weight:600;margin-bottom:16px}
+  /* 비밀번호 마스킹 토글 — 입력칸 안쪽 우측에 겹쳐 둔다(터치 타깃 44x44) */
+  .pw-wrap{position:relative}
+  .pw-wrap input{padding-right:52px}
+  .pw-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);
+    width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
+    background:none;border:0;padding:0;color:var(--muted);cursor:pointer;border-radius:var(--r-md)}
+  .pw-toggle:hover{color:var(--ink)}
+  .pw-toggle:focus-visible{outline:1px solid var(--ink)}
+  .pw-toggle .ic{width:20px;height:20px}
 
   /* 크림 푸터 (다크 아님) */
   .footer{background:var(--surface-soft);color:var(--body);border-top:1px solid var(--hairline-soft);
@@ -183,6 +192,8 @@
     <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
     <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16a1 1 0 0 1-.9 1.5H3.9A1 1 0 0 1 3 19z"/><path d="M12 10v4M12 17h.01"/></symbol>
     <symbol id="i-bookmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 6.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.3 3.9"/><path d="M6.5 7.6C3.8 9.2 2 12 2 12s3.6 7 10 7a9.9 9.9 0 0 0 4-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></symbol>
   </svg>
 
   {% block topbar %}

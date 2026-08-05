@@ -12,6 +12,11 @@
   form .btn-primary{width:100%;margin-top:var(--s-xxs)}
   /* 입력 규칙 안내(에러가 아니므로 danger 색을 쓰지 않는다) */
   .field-hint{color:var(--muted);font-size:12.5px;margin-top:6px}
+  /* 비밀번호 규칙 체크리스트 — 판정은 서버가 하고 여기는 안내만 한다(U3) */
+  .pw-rules{list-style:disc;margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12.5px}
+  .pw-rules li{margin-top:2px}
+  /* 필드 에러가 여러 건일 수 있으므로 목록으로 낸다(base의 .field-error 색·크기 유지) */
+  .field-error{margin:6px 0 0;padding-left:18px;list-style:disc}
   .form-foot{margin-top:var(--s-md);text-align:center;font-size:14px;color:var(--muted)}
 </style>
 {% endblock %}
@@ -19,6 +24,9 @@
 {% block topbar %}{% endblock %}
 
 {% block content %}
+{% from "_macros.html" import password_field %}
+{# 컨텍스트 없이 직접 렌더하는 템플릿 테스트에서도 죽지 않게 기본값을 준다 #}
+{% set field_errors = errors|default({}) %}
 <div class="login-head">
   <h1>회원가입</h1>
   <p class="sub">내 조건에 맞는 청약을 한눈에</p>
@@ -31,21 +39,34 @@
     <svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg>{{ error }}
   </div>
   {% endif %}
-  <div class="field">
+  <div class="field{{ ' has-error' if field_errors.get('email') else '' }}">
     <label for="email">이메일</label>
     <!-- 재렌더 시 입력값 보존(자동이스케이프로 출력) -->
     <input id="email" name="email" type="email" autocomplete="email"
            value="{{ email or '' }}" autofocus
-           {% if error %}aria-invalid="true" aria-describedby="register-error"{% endif %}>
+           {% if field_errors.get('email') %}class="invalid" aria-invalid="true" aria-describedby="e-email"
+           {% elif error %}aria-invalid="true" aria-describedby="register-error"{% endif %}>
+    {% if field_errors.get('email') %}
+    <ul class="field-error" id="e-email">{% for m in field_errors.get('email') %}<li>{{ m }}</li>{% endfor %}</ul>
+    {% endif %}
   </div>
-  <div class="field">
-    <label for="password">비밀번호</label>
-    <input id="password" name="password" type="password" autocomplete="new-password"
-           aria-describedby="password-hint{% if error %} register-error{% endif %}"
-           {% if error %}aria-invalid="true"{% endif %}>
-    <p class="field-hint" id="password-hint">128자 이하로 입력해주세요</p>
-  </div>
+  {# 폼 레벨 error(중복 이메일)는 이메일 문제이므로 비밀번호 칸을 invalid 로 표시하지 않는다 #}
+  {% call password_field('password', '비밀번호', 'new-password',
+                         messages=field_errors.get('password', []),
+                         hint_id='password-hint pw-rules') %}
+    <p class="field-hint" id="password-hint">128자 이하로, 아래 규칙을 모두 만족해야 합니다</p>
+    <ul class="pw-rules" id="pw-rules">
+      {% for hint in policy_hints|default([]) %}<li>{{ hint }}</li>{% endfor %}
+    </ul>
+  {% endcall %}
+  {{ password_field('password2', '비밀번호 확인', 'new-password',
+                    messages=field_errors.get('password2', [])) }}
   <button type="submit" class="btn btn-primary">회원가입</button>
 </form>
 <p class="form-foot">이미 계정이 있으신가요? <a href="/login">로그인</a></p>
+{% endblock %}
+
+{% block scripts %}
+{% from "_macros.html" import password_toggle_script %}
+{{ password_toggle_script() }}
 {% endblock %}

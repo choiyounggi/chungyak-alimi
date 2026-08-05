@@ -84,10 +84,14 @@ def test_failed_login_rerenders_form_with_error():
 
 
 def test_duplicate_register_rerenders_form_and_keeps_email():
-    _client().post("/register", data={"email": EMAIL, "password": PASSWORD})
+    _client().post(
+        "/register", data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD}
+    )
 
     r = _client().post(
-        "/register", data={"email": EMAIL, "password": PASSWORD}, follow_redirects=False
+        "/register",
+        data={"email": EMAIL, "password": PASSWORD, "password2": PASSWORD},
+        follow_redirects=False,
     )
 
     assert r.status_code == 409
@@ -100,7 +104,11 @@ def test_register_error_page_does_not_reflect_user_input_as_html():
     """XSS 경계: 입력한 값은 이스케이프되어 원시 태그로 렌더되지 않는다."""
     r = _client().post(
         "/register",
-        data={"email": '<script>alert(1)</script>@x', "password": PASSWORD},
+        data={
+            "email": '<script>alert(1)</script>@x',
+            "password": PASSWORD,
+            "password2": PASSWORD,
+        },
         follow_redirects=False,
     )
 
