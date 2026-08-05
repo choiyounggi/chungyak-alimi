@@ -33,6 +33,7 @@ from ..regions import region_matches
 from ..scoring import judge_notice, judge_rank, judge_rank_public, load_profile
 from . import auth, onboarding
 from .auth import current_member_id, require_login
+from .onboarding import PREFERRED_TYPE_LABELS
 from .forms import (
     COUPLE_HOUSEHOLD_TYPES,
     HOUSEHOLD_TYPES,
@@ -77,6 +78,35 @@ SPECIAL_SUPPLY_LABELS = {
     "ETC_HSHLDCO": "기타",
 }
 
+# 회원 선호 전형(scoring.PREFERRED_TYPES) → 공고 특별공급 라벨(SPECIAL_SUPPLY_LABELS) 매칭.
+# "special"(특별공급 전반)/"general"(일반공급)은 특정 라벨에 대응하지 않아 아래 함수가 따로 다룬다.
+_PREFERRED_TYPE_SPECIALS: dict[str, frozenset[str]] = {
+    "newlywed": frozenset({"신혼부부"}),
+    "pre_newlywed": frozenset({"신혼부부"}),  # 예비신혼도 신혼부부 특별공급 대상이다
+    "youth": frozenset({"청년"}),
+}
+
+
+def _preferred_hits(specials: list[str], preferred: list[str]) -> list[str]:
+    """이 공고가 회원 선호 전형 중 무엇에 해당하는가 → 표시용 한글 라벨(정렬·중복제거).
+
+    선호를 지정하지 않았으면 항상 빈 리스트다 — 미지정 회원에겐 배지도 토글도 내지 않는다.
+    판정은 서버가 한 번만 한다(라벨 정규화 로직을 JS 에 복제하지 않는다).
+    """
+    if not preferred:
+        return []
+    have = set(specials)
+    hits: set[str] = set()
+    for code in preferred:
+        if code == "general":
+            hits.add("일반")  # 일반공급은 모든 공고에 있다
+        elif code == "special":
+            hits |= have  # 특별공급 전반 — 이 공고가 가진 특공 라벨 전부
+        else:
+            hits |= have & _PREFERRED_TYPE_SPECIALS.get(code, frozenset())
+    return sorted(hits)
+
+
 # 규제/특성 플래그(raw 필드 → 라벨). 값이 'Y'/'N' 또는 코드.
 REGULATION_FLAGS = {
     "SPECLT_RDN_EARTH_AT": "투기과열지구",
@@ -116,6 +146,9 @@ def _dashboard_item(
     *,
     in_area: bool | None = None,
     in_interest: bool = True,
+    housing_type: str | None = None,
+    rank_reasons: list[str] | None = None,
+    preferred: list[str] | None = None,
 ) -> dict:
     """공고 1건 → 카드용 dict(분양가·면적·D-day·좌표·특공·북마크). 대시보드/북마크 공용."""
     hts = house_types_of(n.pblanc_no, session=session)
@@ -151,6 +184,12 @@ def _dashboard_item(
         "in_area": in_area,
         # 회원 관심지역에 드는가 — 관심지역 미입력이면 전부 True(폴백=전체).
         "in_interest": in_interest,
+        # 공고 유형("민영"/"국민"). judge_notice 가 판별한 값만 싣는다 — app.py 는 재판별하지 않는다.
+        "housing_type": housing_type,
+        # 순위 판정 사유(표시 전용). 호출자 간 리스트 공유를 막으려 새 리스트로 복사한다.
+        "rank_reasons": list(rank_reasons or []),
+        # 회원 선호 전형에 해당하는 라벨. 선호 미지정이면 빈 리스트(배지·필터 모두 비활성).
+        "preferred_hits": _preferred_hits(sorted(specials), list(preferred or [])),
     }
 
 
@@ -196,6 +235,8 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
         else []
     )
     interest_regions = list(prof.interest_regions or []) if prof is not None else []
+    # 선호 전형은 코드로 넘긴다 — 라벨 매칭은 특공 라벨을 이미 가진 _dashboard_item 안에서 한 번만.
+    preferred = list(prof.preferred_types or []) if prof is not None else []
     bmarks = bookmarked_pblanc_nos(member_id, session=session)
 
     q = (
@@ -208,16 +249,20 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
     for n in session.scalars(q).all():
         hts = house_types_of(n.pblanc_no, session=session)
         my_rank: str | None = None
+        housing_type: str | None = None
+        rank_reasons: list[str] = []
         # 지역 판정은 순위 지원 여부와 무관하다(공공 공고도 해당지역일 수 있다).
         in_area = region_matches(n.area_nm, applicant_regions)
         notice_judged = judge_notice(n, hts, profile, today=today) if profile is not None else None
         if notice_judged is not None and notice_judged["supported"]:
             # supported 게이트와 유형 판별은 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
-            if notice_judged["housing_type"] == "민영":
+            housing_type = notice_judged["housing_type"]
+            if housing_type == "민영":
                 judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
             else:
                 judged = judge_rank_public(n, profile, today=today, applicant_regions=applicant_regions)
             my_rank, in_area = judged["rank"], judged["in_area"]
+            rank_reasons = judged["reasons"]
         items.append(
             _dashboard_item(
                 session,
@@ -230,6 +275,9 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
                 in_interest=region_matches(n.area_nm, interest_regions)
                 if interest_regions
                 else True,
+                housing_type=housing_type,
+                rank_reasons=rank_reasons,
+                preferred=preferred,
             )
         )
     rank_order = {"1순위": 0, "2순위": 1}
@@ -523,6 +571,9 @@ def index(request: Request, member_id: int = Depends(require_login)):
         prof = get_profile(member_id, session=session)
         interest_regions = list(prof.interest_regions or []) if prof is not None else []
         onboarding_step = prof.onboarding_step if prof is not None else 0
+        chosen = set(prof.preferred_types or []) if prof is not None else set()
+        # 표시용 한글 라벨만 내려보낸다(정의 순서 유지). 비면 템플릿이 토글을 렌더하지 않는다.
+        preferred_types = [label for code, label in PREFERRED_TYPE_LABELS if code in chosen]
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -533,6 +584,8 @@ def index(request: Request, member_id: int = Depends(require_login)):
             "kakao_key": settings.kakao_js_key,
             "agencies": AGENCIES,
             "interest_regions": interest_regions,
+            # 선호 전형(한글 라벨). 비어 있으면 index.html 이 "선호 전형만" 토글을 렌더하지 않는다.
+            "preferred_types": preferred_types,
             # 온보딩 미완성 배너용(O5) — base.html 이 3 미만일 때만 이어하기 링크를 띄운다.
             "onboarding_step": onboarding_step,
         },

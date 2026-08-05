@@ -94,6 +94,8 @@
      {# 해당지역/관심지역 판정은 서버가 한다 — 지역 정규화 로직을 JS에 복제하지 않는다 #}
      data-inarea="{{ '1' if it.in_area else '0' }}"
      data-interest="{{ '1' if it.in_interest|default(true) else '0' }}"
+     {# 선호 전형 해당 여부도 서버 판정이다 — 라벨 정규화를 JS 에 복제하지 않는다 #}
+     data-preferred="{{ '1' if it.preferred_hits else '0' }}"
      data-lat="{{ it.lat if it.lat is not none else '' }}"
      data-lng="{{ it.lng if it.lng is not none else '' }}"
      data-adres="{{ it.adres or '' }}"
@@ -122,9 +124,12 @@
   <div class="row">
     <span class="tag">{{ n.area_nm or '-' }}</span>
     {# 해당지역 표식은 순위 배지 안에 붙인다 — "해당지역 1순위"가 최상위 신호(D19) #}
-    {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{% if it.in_area %}해당지역 {% endif %}{{ it.my_rank }}</span>
+    {# 유형(민영/국민)을 순위와 함께 읽히게 한다 — 국민은 순차제라 가점을 내세우지 않는다.
+       판정 사유는 title 로만 붙여 카드 본문을 밀어내지 않는다(둘 다 Jinja 자동이스케이프). #}
+    {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}"{% if it.rank_reasons %} title="{{ it.rank_reasons|join(' · ') }}"{% endif %}>{% if it.housing_type %}{{ it.housing_type }} · {% endif %}{% if it.in_area %}해당지역 {% endif %}{{ it.my_rank }}</span>
     {% elif it.in_area %}<span class="tag">해당지역</span>{% endif %}
     <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
+    {% for label in it.preferred_hits %}<span class="tag">{{ label }} 선호</span>{% endfor %}
   </div>
   {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
   <div class="row">
