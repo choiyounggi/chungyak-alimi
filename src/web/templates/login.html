@@ -22,6 +22,7 @@
 {% block topbar %}{% endblock %}
 
 {% block content %}
+{% from "_macros.html" import password_field %}
 <div class="login-head">
   <h1>청약 알리미</h1>
   <p class="sub">내 관심 청약을 한눈에</p>
@@ -41,12 +42,14 @@
            value="{{ email or '' }}" autofocus
            {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
   </div>
-  <div class="field">
-    <label for="password">비밀번호</label>
-    <input id="password" name="password" type="password" autocomplete="current-password"
-           {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
-  </div>
+  {{ password_field('password', '비밀번호', 'current-password',
+                    form_error_id='login-error' if error else '') }}
   <button type="submit" class="btn btn-primary">로그인</button>
 </form>
 <p class="form-foot">아직 계정이 없으신가요? <a href="/register">회원가입</a></p>
+{% endblock %}
+
+{% block scripts %}
+{% from "_macros.html" import password_toggle_script %}
+{{ password_toggle_script() }}
 {% endblock %}

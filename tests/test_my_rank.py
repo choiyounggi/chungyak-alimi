@@ -87,7 +87,8 @@ def test_evaluate_all_stores_rank(session, monkeypatch):
     rows = {m.pblanc_no: (m.matched, m.my_rank) for m in session.scalars(select(MatchResult)).all()}
     assert rows["applyhome:RM1"][0] is True
     assert rows["applyhome:RM1"][1] in ("1순위", "2순위")  # example 프로필(통장 10년·예치금 충족) → 판정됨
-    assert rows["applyhome:RM2"] == (True, None)  # 국민주택 → 판정 미지원 NULL
+    # 국민주택은 judge_rank_public 으로 판정된다(R2). example 프로필은 납입횟수 0회 → 2순위.
+    assert rows["applyhome:RM2"] == (True, "2순위")
 
 
 # ── 평가: 프로필 없으면 전부 NULL (경계값) ──
@@ -149,5 +150,7 @@ def test_index_rank_chip_and_badge(session):
     r = client.get("/")
     assert 'data-ftype="rank"' in r.text
     assert 'data-rank="1순위"' in r.text
-    # 디자인 개편으로 이모지(🏅) 제거 — 순위 배지는 텍스트만 렌더한다
-    assert 'class="rank rank-1">1순위' in r.text
+    # 디자인 개편으로 이모지(🏅) 제거 — 순위 배지는 텍스트만 렌더한다.
+    # t06: 배지가 유형을 순위와 함께 읽히게 한다(판정 사유는 title 속성으로만 붙는다).
+    assert 'class="rank rank-1"' in r.text
+    assert "민영 · 1순위" in r.text

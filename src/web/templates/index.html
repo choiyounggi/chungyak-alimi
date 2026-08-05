@@ -73,6 +73,18 @@
       </div>
     </div>
     {% endif %}
+    {# 선호 전형: 서버가 카드마다 판정(data-preferred)하고, 여기선 무엇을 골랐는지만 보여준다.
+       "선호 전형만"은 순수 화면 상태라 서버 왕복 없이 클라이언트에서 토글한다(D20).
+       선호 미지정이면 이 그룹 자체를 렌더하지 않는다 — 누르면 빈 화면이 되는 토글을 만들지 않는다. #}
+    {% if preferred_types %}
+    <div class="filter-group">
+      <span class="filter-label">선호 전형</span>
+      <div class="chips">
+        <span class="chip chip--info">{{ preferred_types|join(', ') }}</span>
+        <button type="button" class="chip" id="only-preferred" aria-pressed="false">선호 전형만</button>
+      </div>
+    </div>
+    {% endif %}
     <div class="filter-group">
       <span class="filter-label">고정 조건</span>
       <div class="chips">
@@ -128,6 +140,8 @@
   var active = {}; // { type: [선택된 값들] }
   var showAllBtn = document.getElementById("show-all-regions");
   var showAllRegions = false;   // "전체 보기" — 클라이언트 전용 화면 상태(서버 왕복 없음)
+  var onlyPrefBtn = document.getElementById("only-preferred");
+  var onlyPreferred = false;    // "선호 전형만" — 클라이언트 전용 화면 상태(서버 왕복 없음)
 
   function matchesType(card, type, vals) {
     if (type === "agency") return vals.indexOf(card.dataset.agency) !== -1;
@@ -147,6 +161,8 @@
   function matches(card) {
     // 관심지역 기본 필터: 칩/지도 필터와 AND로 결합된다.
     if (!showAllRegions && card.dataset.interest === "0") return false;
+    // 선호 전형 필터: 서버가 판정해 둔 data-preferred 만 읽는다(라벨 비교를 JS 가 하지 않는다).
+    if (onlyPreferred && card.dataset.preferred === "0") return false;
     for (var type in active) {
       if (!active[type] || !active[type].length) continue;
       if (!matchesType(card, type, active[type])) return false; // 종류 간 AND
@@ -196,6 +212,16 @@
       showAllRegions = !showAllRegions;
       showAllBtn.classList.toggle("active", showAllRegions);
       showAllBtn.setAttribute("aria-pressed", showAllRegions ? "true" : "false");
+      apply();
+    });
+  }
+
+  // 선호 미지정 회원에겐 버튼 자체가 렌더되지 않으므로 리스너도 붙지 않는다.
+  if (onlyPrefBtn) {
+    onlyPrefBtn.addEventListener("click", function () {
+      onlyPreferred = !onlyPreferred;
+      onlyPrefBtn.classList.toggle("active", onlyPreferred);
+      onlyPrefBtn.setAttribute("aria-pressed", onlyPreferred ? "true" : "false");
       apply();
     });
   }

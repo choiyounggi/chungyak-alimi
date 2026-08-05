@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     create_engine,
     delete,
@@ -248,6 +249,28 @@ class MemberProfile(Base):
     interest_regions: Mapped[list] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
+    # 온보딩 확장(signup-hardening D1) — 전부 NOT NULL + server_default
+    owns_car: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    account_payment_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    # 거주기간을 '년수'로 저장하지 않는다 — 시간이 지나면 틀리는 값이다(D2).
+    # [{"region": str, "since": "YYYY-MM-DD"|null}]
+    residence_history: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    # 선호 전형(복수). 세대 실태인 household_type 과 다른 개념이라 별도 컬럼(D4).
+    preferred_types: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    # 예비신혼 파트너. 항상 프로필과 통째로 읽고 써서 별도 테이블을 두지 않는다(D5).
+    partners: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    # 0=미시작 … 3=완료. 기기를 바꿔도 이어지도록 세션이 아닌 DB 에 둔다(O1).
+    onboarding_step: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("0")
+    )
 
 
 engine = create_engine(settings.database_url, future=True)
@@ -266,6 +289,19 @@ def init_db() -> None:
             "ALTER TABLE notice ADD COLUMN IF NOT EXISTS mt_rntchrg BIGINT",
             # 전역 북마크 시절 테이블에 회원 컬럼을 보강(D11). PK 재구성은 아래에서.
             "ALTER TABLE bookmark ADD COLUMN IF NOT EXISTS member_id BIGINT",
+            # 온보딩 프로필 확장(D6) — DEFAULT 를 함께 줘야 테이블 재작성 없이 NOT NULL 로 붙는다
+            "ALTER TABLE member_profile ADD COLUMN IF NOT EXISTS owns_car"
+            " BOOLEAN NOT NULL DEFAULT false",
+            "ALTER TABLE member_profile ADD COLUMN IF NOT EXISTS account_payment_count"
+            " INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE member_profile ADD COLUMN IF NOT EXISTS residence_history"
+            " JSONB NOT NULL DEFAULT '[]'::jsonb",
+            "ALTER TABLE member_profile ADD COLUMN IF NOT EXISTS preferred_types"
+            " JSONB NOT NULL DEFAULT '[]'::jsonb",
+            "ALTER TABLE member_profile ADD COLUMN IF NOT EXISTS partners"
+            " JSONB NOT NULL DEFAULT '[]'::jsonb",
+            "ALTER TABLE member_profile ADD COLUMN IF NOT EXISTS onboarding_step"
+            " SMALLINT NOT NULL DEFAULT 0",
         ):
             conn.exec_driver_sql(ddl)
         _ensure_bookmark_member_scope(conn)

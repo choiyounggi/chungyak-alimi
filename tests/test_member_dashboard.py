@@ -39,7 +39,8 @@ from fastapi.testclient import TestClient  # noqa: E402  (테스트 헬퍼 뒤 �
 
 TODAY = date(2026, 7, 7)
 EMAIL = "dashboard-member@example.com"
-PASSWORD = "pw-12345"
+# 가입 경계가 KISA 정책을 강제하므로(Task 04) 픽스처 비밀번호도 정책을 통과해야 한다.
+PASSWORD = "Vu8#mQ2rTz"
 
 # 1순위가 나오는 프로필: 통장 16년(수도권 비규제 요건 1년) + 예치금 충분 + 세대주.
 RANK1_PROFILE = {
@@ -120,7 +121,8 @@ def test_residence_region_gives_in_area_rank1(seeded):
     assert by_no["applyhome:SEOUL"]["in_area"] is True
     assert by_no["applyhome:BUSAN"]["my_rank"] == "1순위"    # 순위는 지역과 무관(D19)
     assert by_no["applyhome:BUSAN"]["in_area"] is False      # 기타지역
-    assert by_no["applyhome:PUBLIC"]["my_rank"] is None      # 국민주택 → 판정 미지원
+    # 국민주택은 judge_rank_public 으로 판정한다(R2). 이 프로필은 납입횟수 0회 → 2순위.
+    assert by_no["applyhome:PUBLIC"]["my_rank"] == "2순위"
     assert by_no["applyhome:PUBLIC"]["in_area"] is True      # 지역 판정은 그래도 한다
 
 

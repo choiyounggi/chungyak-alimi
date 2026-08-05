@@ -1,3 +1,89 @@
+{# 비밀번호 입력 + 마스킹 토글(register·login 공용).
+   messages 가 있으면 profile.html 과 같은 필드 에러 마크업(.field.has-error / input.invalid /
+   #e-<name>)을 쓴다. 비밀번호는 재표시하지 않으므로 value 속성을 절대 내보내지 않는다. #}
+{% macro password_field(name, label, autocomplete, messages=[], hint_id='', form_error_id='') %}
+{% set ids = [] %}
+{% if messages %}{% set _ = ids.append('e-' ~ name) %}{% endif %}
+{% if hint_id %}{% set _ = ids.append(hint_id) %}{% endif %}
+{% if form_error_id %}{% set _ = ids.append(form_error_id) %}{% endif %}
+<div class="field{{ ' has-error' if messages else '' }}">
+  <label for="{{ name }}">{{ label }}</label>
+  <div class="pw-wrap">
+    <input id="{{ name }}" name="{{ name }}" type="password" autocomplete="{{ autocomplete }}"
+           {% if messages %}class="invalid" {% endif %}{% if messages or form_error_id %}aria-invalid="true" {% endif %}{% if ids %}aria-describedby="{{ ids|join(' ') }}"{% endif %}>
+    {# 상태 토글이므로 링크가 아니라 실제 button + aria-pressed. 아이콘 전용이라 aria-label 필수. #}
+    <button type="button" class="pw-toggle" aria-controls="{{ name }}"
+            aria-pressed="false" aria-label="비밀번호 표시">
+      <svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>
+    </button>
+  </div>
+  {% if messages %}
+  <ul class="field-error" id="e-{{ name }}">{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+  {# {% call %} 로 부르면 힌트·규칙 체크리스트가 같은 .field 안에 들어온다(간격 일관) #}
+  {% if caller %}{{ caller() }}{% endif %}
+</div>
+{% endmacro %}
+
+{# 마스킹 토글 JS. input.type 과 속성만 바꾼다 — 문자열 HTML 조립 금지, 값은 건드리지 않는다.
+   JS 가 없으면 버튼은 아무 일도 하지 않고 폼은 masked 상태 그대로 정상 제출된다(점진적 향상). #}
+{% macro password_toggle_script() %}
+<script>
+(function () {
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".pw-toggle");
+    if (!btn) return;
+    var input = document.getElementById(btn.getAttribute("aria-controls"));
+    if (!input) return;
+    var show = btn.getAttribute("aria-pressed") !== "true";
+    input.type = show ? "text" : "password";
+    btn.setAttribute("aria-pressed", show ? "true" : "false");
+    btn.setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 표시");
+    var use = btn.querySelector("use");
+    if (use) use.setAttribute("href", show ? "#i-eye-off" : "#i-eye");
+  });
+})();
+</script>
+{% endmacro %}
+
+{# 텍스트/숫자/날짜 필드 — 오류는 필드 바로 아래 같은 슬롯에 인라인 표시(aria로 연결).
+   ambient 컨텍스트의 values/errors 를 읽으므로 반드시 `with context` 로 import 할 것. #}
+{% macro field(name, label, type="text", placeholder="", suffix="") %}
+<div class="field{{ ' has-error' if errors.get(name) else '' }}">
+  <label for="f-{{ name }}">{{ label }}{% if suffix %} <span class="muted">({{ suffix }})</span>{% endif %}</label>
+  <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}"
+         value="{{ values.get(name, '') }}"
+         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+         {% if type == 'number' %}min="0" inputmode="numeric"{% endif %}
+         class="{{ 'invalid' if errors.get(name) else '' }}"
+         {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+  <p class="field-error" id="e-{{ name }}">{{ errors.get(name, '') }}</p>
+</div>
+{% endmacro %}
+
+{# 체크박스 — 미체크면 브라우저가 전송하지 않으므로 서버 기본값 False 와 의미가 같다 #}
+{% macro check(name, label) %}
+<div class="check">
+  <input id="f-{{ name }}" name="{{ name }}" type="checkbox" value="on"
+         {{ 'checked' if values.get(name) else '' }}>
+  <label for="f-{{ name }}">{{ label }}</label>
+</div>
+{% endmacro %}
+
+{# 온보딩 스텝 표시 — 이동은 링크(<a href>)로, 현재 위치는 aria-current="step" 으로 알린다.
+   reached 이하의 완료 스텝만 링크가 되고 아직 못 간 스텝은 텍스트로 남는다. #}
+{% macro step_nav(current, reached) %}
+<ol class="steps">
+  {% for n, title in [(1, "기본·세대"), (2, "자산·통장·소득"), (3, "지역·선호·파트너")] %}
+  <li class="step{{ ' step--current' if n == current else '' }}"
+      {% if n == current %}aria-current="step"{% endif %}>
+    {% if n <= reached and n != current %}<a href="/onboarding/{{ n }}">{{ n }}. {{ title }}</a>
+    {% else %}<span>{{ n }}. {{ title }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
 {# 공고 카드(대시보드·북마크 페이지 공용). it = app.py _dashboard_item dict. #}
 {% macro notice_card(it) %}
 {% set n = it.notice %}
@@ -8,6 +94,8 @@
      {# 해당지역/관심지역 판정은 서버가 한다 — 지역 정규화 로직을 JS에 복제하지 않는다 #}
      data-inarea="{{ '1' if it.in_area else '0' }}"
      data-interest="{{ '1' if it.in_interest|default(true) else '0' }}"
+     {# 선호 전형 해당 여부도 서버 판정이다 — 라벨 정규화를 JS 에 복제하지 않는다 #}
+     data-preferred="{{ '1' if it.preferred_hits else '0' }}"
      data-lat="{{ it.lat if it.lat is not none else '' }}"
      data-lng="{{ it.lng if it.lng is not none else '' }}"
      data-adres="{{ it.adres or '' }}"
@@ -36,9 +124,12 @@
   <div class="row">
     <span class="tag">{{ n.area_nm or '-' }}</span>
     {# 해당지역 표식은 순위 배지 안에 붙인다 — "해당지역 1순위"가 최상위 신호(D19) #}
-    {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}">{% if it.in_area %}해당지역 {% endif %}{{ it.my_rank }}</span>
+    {# 유형(민영/국민)을 순위와 함께 읽히게 한다 — 국민은 순차제라 가점을 내세우지 않는다.
+       판정 사유는 title 로만 붙여 카드 본문을 밀어내지 않는다(둘 다 Jinja 자동이스케이프). #}
+    {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}"{% if it.rank_reasons %} title="{{ it.rank_reasons|join(' · ') }}"{% endif %}>{% if it.housing_type %}{{ it.housing_type }} · {% endif %}{% if it.in_area %}해당지역 {% endif %}{{ it.my_rank }}</span>
     {% elif it.in_area %}<span class="tag">해당지역</span>{% endif %}
     <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
+    {% for label in it.preferred_hits %}<span class="tag">{{ label }} 선호</span>{% endfor %}
   </div>
   {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
   <div class="row">

@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from datetime import date
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -30,9 +30,20 @@ from ..db import (
 from ..filters import load_filter_config
 from ..members import get_profile, profile_from_member, update_profile
 from ..regions import region_matches
-from ..scoring import judge_notice, judge_rank, load_profile
-from . import auth
+from ..scoring import judge_notice, judge_rank, judge_rank_public, load_profile
+from . import auth, onboarding
 from .auth import current_member_id, require_login
+from .onboarding import PREFERRED_TYPE_LABELS
+from .forms import (
+    COUPLE_HOUSEHOLD_TYPES,
+    HOUSEHOLD_TYPES,
+    _Count,
+    _field_error,
+    _OptCount,
+    _OptDate,
+    _REGION_FIELDS,
+    _Regions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +63,7 @@ _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 init_db()
 
 app.include_router(auth.router)
+app.include_router(onboarding.router)
 
 # 특별공급 세대수 필드(raw) → 라벨
 SPECIAL_SUPPLY_LABELS = {
@@ -65,6 +77,35 @@ SPECIAL_SUPPLY_LABELS = {
     "TRANSR_INSTT_ENFSN_HSHLDCO": "이전기관",
     "ETC_HSHLDCO": "기타",
 }
+
+# 회원 선호 전형(scoring.PREFERRED_TYPES) → 공고 특별공급 라벨(SPECIAL_SUPPLY_LABELS) 매칭.
+# "special"(특별공급 전반)/"general"(일반공급)은 특정 라벨에 대응하지 않아 아래 함수가 따로 다룬다.
+_PREFERRED_TYPE_SPECIALS: dict[str, frozenset[str]] = {
+    "newlywed": frozenset({"신혼부부"}),
+    "pre_newlywed": frozenset({"신혼부부"}),  # 예비신혼도 신혼부부 특별공급 대상이다
+    "youth": frozenset({"청년"}),
+}
+
+
+def _preferred_hits(specials: list[str], preferred: list[str]) -> list[str]:
+    """이 공고가 회원 선호 전형 중 무엇에 해당하는가 → 표시용 한글 라벨(정렬·중복제거).
+
+    선호를 지정하지 않았으면 항상 빈 리스트다 — 미지정 회원에겐 배지도 토글도 내지 않는다.
+    판정은 서버가 한 번만 한다(라벨 정규화 로직을 JS 에 복제하지 않는다).
+    """
+    if not preferred:
+        return []
+    have = set(specials)
+    hits: set[str] = set()
+    for code in preferred:
+        if code == "general":
+            hits.add("일반")  # 일반공급은 모든 공고에 있다
+        elif code == "special":
+            hits |= have  # 특별공급 전반 — 이 공고가 가진 특공 라벨 전부
+        else:
+            hits |= have & _PREFERRED_TYPE_SPECIALS.get(code, frozenset())
+    return sorted(hits)
+
 
 # 규제/특성 플래그(raw 필드 → 라벨). 값이 'Y'/'N' 또는 코드.
 REGULATION_FLAGS = {
@@ -105,6 +146,9 @@ def _dashboard_item(
     *,
     in_area: bool | None = None,
     in_interest: bool = True,
+    housing_type: str | None = None,
+    rank_reasons: list[str] | None = None,
+    preferred: list[str] | None = None,
 ) -> dict:
     """공고 1건 → 카드용 dict(분양가·면적·D-day·좌표·특공·북마크). 대시보드/북마크 공용."""
     hts = house_types_of(n.pblanc_no, session=session)
@@ -140,6 +184,12 @@ def _dashboard_item(
         "in_area": in_area,
         # 회원 관심지역에 드는가 — 관심지역 미입력이면 전부 True(폴백=전체).
         "in_interest": in_interest,
+        # 공고 유형("민영"/"국민"). judge_notice 가 판별한 값만 싣는다 — app.py 는 재판별하지 않는다.
+        "housing_type": housing_type,
+        # 순위 판정 사유(표시 전용). 호출자 간 리스트 공유를 막으려 새 리스트로 복사한다.
+        "rank_reasons": list(rank_reasons or []),
+        # 회원 선호 전형에 해당하는 라벨. 선호 미지정이면 빈 리스트(배지·필터 모두 비활성).
+        "preferred_hits": _preferred_hits(sorted(specials), list(preferred or [])),
     }
 
 
@@ -185,6 +235,8 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
         else []
     )
     interest_regions = list(prof.interest_regions or []) if prof is not None else []
+    # 선호 전형은 코드로 넘긴다 — 라벨 매칭은 특공 라벨을 이미 가진 _dashboard_item 안에서 한 번만.
+    preferred = list(prof.preferred_types or []) if prof is not None else []
     bmarks = bookmarked_pblanc_nos(member_id, session=session)
 
     q = (
@@ -197,12 +249,20 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
     for n in session.scalars(q).all():
         hts = house_types_of(n.pblanc_no, session=session)
         my_rank: str | None = None
+        housing_type: str | None = None
+        rank_reasons: list[str] = []
         # 지역 판정은 순위 지원 여부와 무관하다(공공 공고도 해당지역일 수 있다).
         in_area = region_matches(n.area_nm, applicant_regions)
-        if profile is not None and judge_notice(n, hts, profile, today=today)["supported"]:
-            # supported 게이트는 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
-            judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
+        notice_judged = judge_notice(n, hts, profile, today=today) if profile is not None else None
+        if notice_judged is not None and notice_judged["supported"]:
+            # supported 게이트와 유형 판별은 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
+            housing_type = notice_judged["housing_type"]
+            if housing_type == "민영":
+                judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
+            else:
+                judged = judge_rank_public(n, profile, today=today, applicant_regions=applicant_regions)
             my_rank, in_area = judged["rank"], judged["in_area"]
+            rank_reasons = judged["reasons"]
         items.append(
             _dashboard_item(
                 session,
@@ -215,6 +275,9 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
                 in_interest=region_matches(n.area_nm, interest_regions)
                 if interest_regions
                 else True,
+                housing_type=housing_type,
+                rank_reasons=rank_reasons,
+                preferred=preferred,
             )
         )
     rank_order = {"1순위": 0, "2순위": 1}
@@ -352,56 +415,7 @@ def notice_detail_data(session, n) -> dict:
 
 
 # ── 프로필 폼(Task 10) ────────────────────────────────────────────────────────
-
-# 세대유형 — DB CHECK 제약(ck_member_profile_household_type)과 같은 닫힌 4값(D7).
-HOUSEHOLD_TYPES: tuple[tuple[str, str], ...] = (
-    ("general", "일반"),
-    ("newlywed", "신혼부부"),
-    ("pre_newlywed", "예비신혼부부"),
-    ("youth", "청년"),
-)
-# 두 사람의 거주지·소득본거지를 함께 입력받아야 하는 세대유형
-COUPLE_HOUSEHOLD_TYPES: tuple[str, ...] = ("newlywed", "pre_newlywed")
-
-_DATE_FIELDS = frozenset({"birth_date", "marriage_date", "homeless_since", "account_opened"})
-_NUMBER_FIELDS = frozenset(
-    {
-        "dependents", "children_minor", "real_estate_manwon", "account_balance_manwon",
-        "income_monthly_manwon", "income_base_manwon", "car_value_manwon",
-    }
-)
-_REGION_FIELDS = frozenset({"residence_regions", "income_base_regions", "interest_regions"})
-
-
-def _blank_to(default):
-    """빈 문자열(미입력)을 그 필드의 '값 없음'으로 접는다 — 폼은 미입력도 ''로 보낸다."""
-
-    def convert(v):
-        return default if isinstance(v, str) and not v.strip() else v
-
-    return convert
-
-
-def _split_regions(v):
-    """콤마 구분 문자열 → list[str](공백 트림, 빈 항목 제거). 빈 입력은 []."""
-    if isinstance(v, str):
-        return [s.strip() for s in v.split(",") if s.strip()]
-    return v
-
-
-_OptDate = Annotated[date | None, BeforeValidator(_blank_to(None))]
-# ge 는 Optional 의 **안쪽 int** 에 붙여야 한다. Annotated[int | None, Field(ge=0)] 로 두면
-# 제약이 유니온 전체에 걸려 None 이 들어온 순간 `None >= 0` 으로 TypeError 가 난다.
-# 상한은 저장 컬럼(INTEGER)의 최대치 — 이걸 넘기면 검증을 통과하고도 INSERT 가 터진다.
-_INT_MAX = 2_147_483_647
-_NonNegInt = Annotated[int, Field(ge=0, le=_INT_MAX)]
-_Count = Annotated[_NonNegInt, BeforeValidator(_blank_to(0))]
-_OptCount = Annotated[_NonNegInt | None, BeforeValidator(_blank_to(None))]
-_Regions = Annotated[
-    list[Annotated[str, Field(max_length=50)]],
-    BeforeValidator(_split_regions),
-    Field(max_length=20),
-]
+# 필드 애너테이션·헬퍼는 온보딩 폼과 공유하려고 `forms.py` 로 옮겼다(O6).
 
 
 class ProfileForm(BaseModel):
@@ -444,19 +458,6 @@ class ProfileForm(BaseModel):
     residence_regions: _Regions = []
     income_base_regions: _Regions = []
     interest_regions: _Regions = []
-
-
-def _field_error(field: str) -> str:
-    """필드별 오류 문구 — '무엇이 틀렸나'가 아니라 '무엇을 하면 되나'를 적는다."""
-    if field in _DATE_FIELDS:
-        return "날짜를 YYYY-MM-DD 형식으로 입력해주세요"
-    if field in _NUMBER_FIELDS:
-        return f"0 이상의 숫자를 입력해주세요(최대 {_INT_MAX:,})"
-    if field == "household_type":
-        return "세대유형을 목록에서 선택해주세요"
-    if field in _REGION_FIELDS:
-        return "지역은 콤마로 구분해 20개까지, 각 50자 이내로 입력해주세요"
-    return "입력값을 확인해주세요"
 
 
 def _profile_form_values(prof: MemberProfile | None) -> dict:
@@ -569,6 +570,10 @@ def index(request: Request, member_id: int = Depends(require_login)):
         items = member_dashboard(session, member_id)
         prof = get_profile(member_id, session=session)
         interest_regions = list(prof.interest_regions or []) if prof is not None else []
+        onboarding_step = prof.onboarding_step if prof is not None else 0
+        chosen = set(prof.preferred_types or []) if prof is not None else set()
+        # 표시용 한글 라벨만 내려보낸다(정의 순서 유지). 비면 템플릿이 토글을 렌더하지 않는다.
+        preferred_types = [label for code, label in PREFERRED_TYPE_LABELS if code in chosen]
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -579,6 +584,10 @@ def index(request: Request, member_id: int = Depends(require_login)):
             "kakao_key": settings.kakao_js_key,
             "agencies": AGENCIES,
             "interest_regions": interest_regions,
+            # 선호 전형(한글 라벨). 비어 있으면 index.html 이 "선호 전형만" 토글을 렌더하지 않는다.
+            "preferred_types": preferred_types,
+            # 온보딩 미완성 배너용(O5) — base.html 이 3 미만일 때만 이어하기 링크를 띄운다.
+            "onboarding_step": onboarding_step,
         },
     )
 

@@ -1,0 +1,51 @@
+{% extends "_onboarding_base.html" %}
+{# 매크로는 ambient values/errors 를 읽으므로 각 템플릿에서 `with context` 로 다시 import 한다 #}
+{% from "_macros.html" import field, check with context %}
+
+{% block fields %}
+<section class="section">
+  <h2>기본</h2>
+  <div class="grid">
+    {{ field("birth_date", "생년월일", type="date", placeholder="YYYY-MM-DD") }}
+  </div>
+</section>
+
+<section class="section">
+  <h2>세대</h2>
+  <div class="field{{ ' has-error' if errors.get('household_type') else '' }}">
+    <label for="f-household_type">세대유형</label>
+    <select id="f-household_type" name="household_type"
+            class="{{ 'invalid' if errors.get('household_type') else '' }}"
+            {% if errors.get('household_type') %}aria-invalid="true" aria-describedby="e-household_type"{% endif %}>
+      {% for value, label in [("general", "일반"), ("newlywed", "신혼부부"), ("pre_newlywed", "예비신혼부부"), ("youth", "청년")] %}
+      <option value="{{ value }}"{{ ' selected' if values.get('household_type') == value else '' }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <p class="field-error" id="e-household_type">{{ errors.get('household_type', '') }}</p>
+  </div>
+  <p class="hint" id="newlywed-hint"{% if values.get('household_type') != 'newlywed' %} hidden{% endif %}>
+    신혼부부는 혼인신고일로부터 <b>7년 이내</b>여야 신청할 수 있습니다.
+  </p>
+  <div class="grid">
+    {{ field("marriage_date", "혼인신고일", type="date", placeholder="YYYY-MM-DD") }}
+    {{ field("dependents", "부양가족 수", type="number", suffix="명") }}
+    {{ field("children_minor", "미성년 자녀 수", type="number", suffix="명") }}
+  </div>
+  {{ check("is_household_head", "세대주") }}
+  {{ check("household_all_homeless", "세대원 전원 무주택") }}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 세대유형이 신혼부부일 때만 7년 안내를 보여준다(순수 화면 상태 — 검증은 서버가 한다).
+(function () {
+  var sel = document.getElementById("f-household_type");
+  var hint = document.getElementById("newlywed-hint");
+  if (!sel || !hint) return;
+  function sync() { hint.hidden = sel.value !== "newlywed"; }
+  sel.addEventListener("change", sync);
+  sync();
+})();
+</script>
+{% endblock %}
