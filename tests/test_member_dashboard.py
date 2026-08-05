@@ -120,7 +120,8 @@ def test_residence_region_gives_in_area_rank1(seeded):
     assert by_no["applyhome:SEOUL"]["in_area"] is True
     assert by_no["applyhome:BUSAN"]["my_rank"] == "1순위"    # 순위는 지역과 무관(D19)
     assert by_no["applyhome:BUSAN"]["in_area"] is False      # 기타지역
-    assert by_no["applyhome:PUBLIC"]["my_rank"] is None      # 국민주택 → 판정 미지원
+    # 국민주택은 judge_rank_public 으로 판정한다(R2). 이 프로필은 납입횟수 0회 → 2순위.
+    assert by_no["applyhome:PUBLIC"]["my_rank"] == "2순위"
     assert by_no["applyhome:PUBLIC"]["in_area"] is True      # 지역 판정은 그래도 한다
 
 

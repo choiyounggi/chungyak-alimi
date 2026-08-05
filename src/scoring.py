@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, model_validator
 
-from .regions import region_matches
+from .regions import normalize_region, region_matches
 
 # ── 규칙 상수 (민영주택 기준, 2026-07 확인 — 제도 변경 시 여기만 수정) ──
 # 소득초과자 추첨제 부동산가액 상한(만원): 국토부 2021.11 개편(3억3,100만원)
@@ -25,6 +25,17 @@ DEPOSIT_TABLE = {
 }
 _GWANGYEOK = ("대구", "인천", "광주", "대전", "울산")
 _CAPITAL = ("서울", "경기", "인천")
+
+# ── 규칙 상수 (국민주택/공공, 주택공급에 관한 규칙 제27조·제28조 — 2026-08 확인) ──
+# 지역군별 청약통장 가입기간(개월) 하한. regulated=투기과열지구·조정대상지역,
+# capital=수도권(_CAPITAL), other=그 외.
+PUBLIC_ACCOUNT_MONTHS = {"regulated": 24, "capital": 12, "other": 6}
+# 지역군별 납입횟수(회) 하한 — 납입횟수가 국민주택 순위에 반영되는 지점이다.
+PUBLIC_PAYMENT_COUNTS = {"regulated": 24, "capital": 12, "other": 6}
+# 규제지역 해당지역 우선공급 거주기간(년). 미달은 사유에만 표기하고 순위를 낮추지 않는다(R3).
+REGULATED_RESIDENCE_YEARS = 2.0
+# 국민주택(공공) 공고를 내는 수집원. house_dtl_secd_nm 에 "국민"이 없어도 이 소스면 국민으로 본다.
+PUBLIC_SOURCES = ("lh", "myhome", "sh", "gh")
 
 
 class AccountInfo(BaseModel):
@@ -184,6 +195,63 @@ def _is_regulated(raw: dict) -> bool:
     return raw.get("MDAT_TRGET_AREA_SECD") not in (None, "", "N")
 
 
+def _full_months(start: date, end: date) -> int:
+    """만 개월수(캘린더 기준).
+
+    국민주택 요건이 '개월'로 규정돼 있어 `_full_years * 12`로 환산하지 않는다 —
+    365일은 `365/365.25*12 = 11.99`가 되어 12개월 경계를 오판한다.
+    """
+    if end < start:
+        return 0
+    months = (end.year - start.year) * 12 + (end.month - start.month)
+    if end.day < start.day:
+        months -= 1
+    return max(0, months)
+
+
+def residence_years_in(p: Profile, region: str | None, today: date | None = None) -> float:
+    """`region`에서의 거주 연수. 이력이 여러 건이면 **최대값**, 없으면 0.0.
+
+    지역 비교는 `regions.normalize_region` 정규형으로 한다("서울특별시" == "서울").
+    `since`가 없는 이력과 빈 지역은 계산에서 제외한다 — 예외를 던지지 않는다.
+    """
+    today = today or date.today()
+    target = normalize_region(region)
+    if not target:
+        return 0.0
+    years = [
+        _full_years(h.since, today)
+        for h in p.residence_history
+        if h.since is not None and normalize_region(h.region) == target
+    ]
+    return max(years) if years else 0.0
+
+
+def _residence_reasons(notice, p: Profile, today: date, regulated: bool) -> list[str]:
+    """규제지역 공고의 해당지역 우선공급 거주기간 미달을 사유 목록으로 돌려준다(R3).
+
+    정책 주의: 거주기간을 순위 요건이 아니라 **표기 사유**로만 다루는 것은 기존
+    D19(지역은 1·2순위 요건이 아니다)와 같은 원칙의 *사용자 지정 정책*이며,
+    공식 청약 규칙의 해당지역 우선공급 판정과는 다를 수 있다.
+    """
+    if not regulated:
+        return []
+    years = residence_years_in(p, notice.area_nm, today)
+    if years >= REGULATED_RESIDENCE_YEARS:
+        return []
+    return [
+        f"규제지역 해당지역 우선공급 거주기간 부족"
+        f"({years:.1f}년<{REGULATED_RESIDENCE_YEARS:g}년)"
+    ]
+
+
+def _public_area_group(notice, regulated: bool) -> str:
+    """국민주택 지역군: 규제 → regulated, 수도권 → capital, 그 외 → other."""
+    if regulated:
+        return "regulated"
+    return "capital" if (notice.area_nm or "") in _CAPITAL else "other"
+
+
 def judge_rank(
     notice,
     house_types,
@@ -201,6 +269,9 @@ def judge_rank(
     공식 청약 규칙이 아니다(공식 규칙은 원칙적으로 거주지 기준).
     또한 지역은 1·2순위 요건이 아니므로 `in_area`는 `rank`에 영향을 주지 않는다.
     "해당지역 1순위"는 `rank == "1순위" and in_area`로 표현한다.
+
+    정책(R3): 규제지역 공고면 해당지역 우선공급 거주기간(2년) 미달을 `reasons`에
+    표기하지만 `rank`는 낮추지 않는다 — D19와 같은 원칙의 사용자 지정 정책이다.
     """
     today = today or date.today()
     raw = notice.raw or {}
@@ -231,6 +302,60 @@ def judge_rank(
     blocking = [r for r in reasons if not r.startswith("일부")]
     rank = "2순위" if blocking else "1순위"
 
+    # R3: 거주기간은 사유로만 붙는다 — rank 확정 뒤에 붙여 blocking 계산에 들어가지 않게 한다.
+    reasons += _residence_reasons(notice, p, today, regulated)
+
+    in_area: bool | None = None
+    if applicant_regions is not None:
+        in_area = region_matches(notice.area_nm, applicant_regions)
+        reasons.append("해당지역(거주지/소득본거지 매칭)" if in_area else "기타지역")
+
+    return {"rank": rank, "regulated": regulated, "reasons": reasons, "in_area": in_area}
+
+
+def judge_rank_public(
+    notice,
+    p: Profile,
+    today: date | None = None,
+    applicant_regions: list[str] | None = None,
+) -> dict:
+    """국민주택(공공) 1·2순위 판정 — 가입기간 + 납입횟수 + 무주택 + 규제지역 세대주.
+
+    반환 키는 `judge_rank`(민영)와 **정확히 같다**(`rank`/`regulated`/`reasons`/`in_area`) —
+    호출측(대시보드)이 두 결과를 같은 코드로 다루기 때문이다.
+    민영과 달리 예치금·전용면적을 보지 않으므로 `house_types`를 받지 않는다.
+
+    사유가 하나라도 있으면 2순위, 없으면 1순위.
+    `p.account.opened`가 없으면 가입기간 0개월로 계산한다 — 예외를 던지지 않는다.
+
+    정책(D19 동일): `applicant_regions`가 주어지면 `in_area`를 함께 돌려주지만
+    지역은 1·2순위 요건이 아니므로 `rank`에 영향을 주지 않는다.
+    정책(R3): 규제지역 거주기간 미달은 사유에만 표기하고 순위를 낮추지 않는다.
+    """
+    today = today or date.today()
+    regulated = _is_regulated(notice.raw or {})
+    group = _public_area_group(notice, regulated)
+    reasons: list[str] = []
+
+    months = _full_months(p.account.opened, today) if p.account.opened else 0
+    need_months = PUBLIC_ACCOUNT_MONTHS[group]
+    if months < need_months:
+        reasons.append(f"통장 가입기간 부족({months}개월<{need_months}개월)")
+
+    need_count = PUBLIC_PAYMENT_COUNTS[group]
+    if p.account_payment_count < need_count:
+        reasons.append(f"납입횟수 부족({p.account_payment_count}회<{need_count}회)")
+
+    if not p.household_all_homeless:
+        reasons.append("무주택 세대구성원 아님")
+
+    if regulated and not p.is_household_head:
+        reasons.append("규제지역: 세대주 아님")
+
+    # 순위는 거주기간·지역 사유가 붙기 전에 확정한다(R3 / D19).
+    rank = "2순위" if reasons else "1순위"
+    reasons += _residence_reasons(notice, p, today, regulated)
+
     in_area: bool | None = None
     if applicant_regions is not None:
         in_area = region_matches(notice.area_nm, applicant_regions)
@@ -260,7 +385,13 @@ def _income_tier(pct: float | None, priority: int, general: int, p: Profile) -> 
 
 
 def judge_newlywed(p: Profile, today: date | None = None) -> dict:
-    """신혼부부 특공(민영): 혼인 7년 이내 + 무주택세대 + 소득/자산 구간."""
+    """신혼부부 특공(민영): 혼인 7년 이내 + 무주택세대 + 소득/자산 구간.
+
+    정책(R5, 사용자 지정): `partners`(예비신혼 상대방) 중 한 명이라도 자가를 보유하면
+    부적격으로 본다. 예비신혼은 아직 한 세대가 아니므로 `household_all_homeless`와
+    **별개로** 보는 것이며, 공식 청약 규칙의 판정과 다를 수 있다.
+    `partners`가 비어 있으면(기본값) 기존 판정과 완전히 동일하다.
+    """
     today = today or date.today()
     reasons: list[str] = []
     if p.marriage_date is None and not p.engaged:
@@ -270,6 +401,8 @@ def judge_newlywed(p: Profile, today: date | None = None) -> dict:
         reasons.append(f"혼인 {my:.1f}년(>7년)")
     if not p.household_all_homeless:
         reasons.append("무주택세대 아님")
+    if any(pt.owns_home for pt in p.partners):
+        reasons.append("예비신혼 상대방 자가 보유")
     if reasons:
         return {"eligible": False, "tier": None, "reasons": reasons}
 
@@ -310,29 +443,59 @@ def judge_first_life(p: Profile, today: date | None = None) -> dict:
     return {"eligible": tier not in ("부적격",), "tier": tier, "reasons": [why]}
 
 
-def judge_notice(notice, house_types, p: Profile, today: date | None = None) -> dict:
-    """공고 1건에 대한 종합 판정. 민영(청약홈)만 지원 — 그 외 소스는 별도 기준(순차제)."""
-    today = today or date.today()
+def _housing_type(notice) -> str | None:
+    """공고를 "민영"/"국민"으로 판별한다. 어느 쪽도 아니면 None(판정 미지원).
+
+    민영 판정은 기존 D20 그대로 **청약홈 소스에 한한다**(다른 수집원의 민영 표기는
+    예치금·전용면적 정보를 신뢰할 수 없다). 국민은 공고 표기 또는 공공 수집원으로 본다.
+    """
     source = getattr(notice, "source", None) or (notice.raw or {}).get("_source")
     dtl = notice.house_dtl_secd_nm or ""
-    if source != "applyhome" or "민영" not in dtl:
+    if source == "applyhome" and "민영" in dtl:
+        return "민영"
+    if "국민" in dtl or source in PUBLIC_SOURCES:
+        return "국민"
+    return None
+
+
+def judge_notice(notice, house_types, p: Profile, today: date | None = None) -> dict:
+    """공고 1건에 대한 종합 판정. 민영/국민주택을 유형별로 분기한다(R2).
+
+    두 유형이 **같은 키**를 돌려주고, 소비자는 `housing_type`으로 분기한다 —
+    요약 문자열을 파싱해 분기하지 말 것. 판별 불가 공고는 기존대로 `supported=False`.
+
+    주의: 국민 경로의 `score`/`newlywed`/`first_life`는 **민영 기준 참고값**이다.
+    국민주택 순위(순차제: 가입기간·납입횟수)에 맞게 판정된 것은 `rank`뿐이다.
+    """
+    today = today or date.today()
+    housing_type = _housing_type(notice)
+    if housing_type is None:
         return {
             "supported": False,
-            "reason": "공공·국민주택은 별도 기준(납입액 순차제) — 판정 미지원",
+            "housing_type": None,
+            "reason": "민영·국민 어느 유형으로도 판별할 수 없는 공고 — 판정 미지원",
         }
 
     score = score_points(p, today)
-    rank = judge_rank(notice, house_types, p, today)
+    if housing_type == "민영":
+        rank = judge_rank(notice, house_types, p, today)
+        head = f"가점 {score['total']}점 · {rank['rank']}"
+    else:
+        # 국민주택은 가점제가 아니라 순차제이므로 요약에 가점을 넣지 않는다.
+        rank = judge_rank_public(notice, p, today)
+        head = f"국민주택 · {rank['rank']}"
+
     newlywed = judge_newlywed(p, today)
     first_life = judge_first_life(p, today)
 
-    parts = [f"가점 {score['total']}점 · {rank['rank']}"]
+    parts = [head]
     if newlywed["tier"]:
         parts.append(f"신혼 {newlywed['tier']}")
     if first_life["tier"]:
         parts.append(f"생초 {first_life['tier']}")
     return {
         "supported": True,
+        "housing_type": housing_type,
         "score": score,
         "rank": rank,
         "newlywed": newlywed,

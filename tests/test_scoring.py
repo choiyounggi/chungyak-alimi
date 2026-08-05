@@ -177,10 +177,13 @@ def test_judge_notice_supported():
     assert "신혼 우선공급" in out["summary"]
 
 
-# ── 종합: LH/국민주택 미지원 (경계값) ──
-def test_judge_notice_unsupported():
-    assert judge_notice(_notice(source="lh", dtl=""), [], _profile(), today=TODAY)["supported"] is False
-    assert judge_notice(_notice(dtl="국민"), [], _profile(), today=TODAY)["supported"] is False
+# ── 종합: 국민주택·공공 수집원은 국민 순위로 지원 (R2 — 기존 '미지원' 계약을 대체) ──
+def test_judge_notice_public_supported():
+    lh = judge_notice(_notice(source="lh", dtl=""), [], _profile(), today=TODAY)
+    assert lh["supported"] is True and lh["housing_type"] == "국민"
+    kookmin = judge_notice(_notice(dtl="국민"), [], _profile(), today=TODAY)
+    assert kookmin["housing_type"] == "국민"
+    assert kookmin["rank"]["rank"] in ("1순위", "2순위")
 
 
 # ── 프로필 로드: 파일 없으면 None (에러 케이스) ──
@@ -194,10 +197,11 @@ def test_load_profile_example():
     assert p is not None and p.account.opened is not None
 
 
-# ── 종합: 청약홈 외 소스는 '민영'이어도 미지원 (D20) ──
-def test_non_applyhome_source_is_unsupported():
-    out = judge_notice(_notice(source="myhome", dtl="민영"), [], _profile(), today=TODAY)
+# ── 종합: 민영도 국민도 아닌 공고(HUG 든든전세)는 기존대로 미지원 (에러 케이스) ──
+def test_unknown_housing_type_is_unsupported():
+    out = judge_notice(_notice(source="hug", dtl="든든전세"), [], _profile(), today=TODAY)
     assert out["supported"] is False
+    assert out["housing_type"] is None
     assert "판정 미지원" in out["reason"]
 
 

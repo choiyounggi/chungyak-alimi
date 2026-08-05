@@ -30,7 +30,7 @@ from ..db import (
 from ..filters import load_filter_config
 from ..members import get_profile, profile_from_member, update_profile
 from ..regions import region_matches
-from ..scoring import judge_notice, judge_rank, load_profile
+from ..scoring import judge_notice, judge_rank, judge_rank_public, load_profile
 from . import auth
 from .auth import current_member_id, require_login
 
@@ -199,9 +199,13 @@ def member_dashboard(session, member_id: int, today: date | None = None) -> list
         my_rank: str | None = None
         # 지역 판정은 순위 지원 여부와 무관하다(공공 공고도 해당지역일 수 있다).
         in_area = region_matches(n.area_nm, applicant_regions)
-        if profile is not None and judge_notice(n, hts, profile, today=today)["supported"]:
-            # supported 게이트는 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
-            judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
+        notice_judged = judge_notice(n, hts, profile, today=today) if profile is not None else None
+        if notice_judged is not None and notice_judged["supported"]:
+            # supported 게이트와 유형 판별은 judge_notice 가 쥐고 있어 그대로 재사용한다(중복 정의 금지).
+            if notice_judged["housing_type"] == "민영":
+                judged = judge_rank(n, hts, profile, today=today, applicant_regions=applicant_regions)
+            else:
+                judged = judge_rank_public(n, profile, today=today, applicant_regions=applicant_regions)
             my_rank, in_area = judged["rank"], judged["in_area"]
         items.append(
             _dashboard_item(
