@@ -163,10 +163,18 @@ class NotifyLog(Base):
 
 
 class Bookmark(Base):
-    """사용자가 즐겨찾기한 공고(단일 사용자라 pblanc_no만으로 식별)."""
+    """회원이 즐겨찾기한 공고 — 회원↔공고 접합(junction) 테이블.
+
+    접합 테이블의 표준대로 두 키의 복합 PK((member_id, pblanc_no))를 쓴다(D11).
+    선두가 member_id 라 "이 회원의 북마크" 조회는 이 PK 인덱스로 바로 처리된다.
+    회원이 지워지면 북마크는 혼자 남아 의미가 없으므로 ON DELETE CASCADE.
+    """
 
     __tablename__ = "bookmark"
 
+    member_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("member.id", ondelete="CASCADE"), primary_key=True
+    )
     pblanc_no: Mapped[str] = mapped_column(String, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -256,9 +264,68 @@ def init_db() -> None:
             "ALTER TABLE notice ADD COLUMN IF NOT EXISTS agency VARCHAR",
             "ALTER TABLE notice ADD COLUMN IF NOT EXISTS rent_gtn BIGINT",
             "ALTER TABLE notice ADD COLUMN IF NOT EXISTS mt_rntchrg BIGINT",
+            # 전역 북마크 시절 테이블에 회원 컬럼을 보강(D11). PK 재구성은 아래에서.
+            "ALTER TABLE bookmark ADD COLUMN IF NOT EXISTS member_id BIGINT",
         ):
             conn.exec_driver_sql(ddl)
+        _ensure_bookmark_member_scope(conn)
     migrate_global_ids()
+
+
+def _ensure_bookmark_member_scope(conn) -> None:
+    """bookmark 의 PK 를 (member_id, pblanc_no) 로, member_id 를 CASCADE FK 로 맞춘다.
+
+    create_all 은 **이미 있는** 테이블의 PK/제약을 바꾸지 않는다. 전역 북마크
+    (pblanc_no 단일 PK)로 만들어진 배포 DB 는 이 재구성 없이는 두 회원이 같은 공고를
+    북마크할 수 없고, on_conflict(member_id, pblanc_no) 도 매칭 제약이 없어 실패한다.
+
+    멱등: 이미 복합 PK 면 아무것도 하지 않는다. 이관 전(member_id NULL) 행이 남아
+    있으면 NOT NULL 을 걸 수 없으므로 건너뛰고, migrate_global_bookmarks_to_member 가
+    이관을 마친 뒤 이 함수를 다시 불러 완성한다.
+    """
+    pk_cols = {
+        r[0]
+        for r in conn.exec_driver_sql(
+            "SELECT a.attname FROM pg_index i"
+            " JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)"
+            " WHERE i.indrelid = 'bookmark'::regclass AND i.indisprimary"
+        ).fetchall()
+    }
+    if pk_cols == {"member_id", "pblanc_no"}:
+        return
+    if conn.exec_driver_sql("SELECT 1 FROM bookmark WHERE member_id IS NULL LIMIT 1").first():
+        return  # 이관 전 전역 행이 남아 있음 — 이관 후에 재구성한다
+    conn.exec_driver_sql("ALTER TABLE bookmark ALTER COLUMN member_id SET NOT NULL")
+    conn.exec_driver_sql("ALTER TABLE bookmark DROP CONSTRAINT IF EXISTS bookmark_pkey")
+    conn.exec_driver_sql("ALTER TABLE bookmark ADD PRIMARY KEY (member_id, pblanc_no)")
+    if not conn.exec_driver_sql(
+        "SELECT 1 FROM pg_constraint WHERE conname = 'bookmark_member_id_fkey'"
+    ).first():
+        conn.exec_driver_sql(
+            "ALTER TABLE bookmark ADD CONSTRAINT bookmark_member_id_fkey"
+            " FOREIGN KEY (member_id) REFERENCES member(id) ON DELETE CASCADE"
+        )
+
+
+def migrate_global_bookmarks_to_member(member_id: int, *, session: Session | None = None) -> int:
+    """전역 시절(member_id NULL) 북마크를 대상 회원의 것으로 재지정한다(D11). 반환: 이관 행 수.
+
+    멱등 — 두 번째 호출은 옮길 행이 없어 0 을 돌려준다. 신규 DB(복합 PK 완성)에서는
+    NULL 행 자체가 존재할 수 없어 역시 0. 이관이 끝나면 PK 재구성을 이어서 마친다.
+
+    PK 재구성은 ACCESS EXCLUSIVE 락이 필요해 항상 **별도 커넥션**에서 돌린다.
+    session 을 받은 경우 UPDATE 를 먼저 커밋해 락을 놓은 뒤 재구성을 진행한다.
+    """
+    stmt = text("UPDATE bookmark SET member_id = :member_id WHERE member_id IS NULL")
+    if session is not None:
+        moved = session.execute(stmt, {"member_id": member_id}).rowcount
+        session.commit()
+    else:
+        with engine.begin() as conn:
+            moved = conn.execute(stmt, {"member_id": member_id}).rowcount
+    with engine.begin() as conn:
+        _ensure_bookmark_member_scope(conn)
+    return moved
 
 
 def migrate_global_ids() -> dict:
@@ -512,13 +579,15 @@ def house_types_of(pblanc_no: str, *, session: Session) -> list[NoticeHouseType]
     )
 
 
-def add_bookmark(pblanc_no: str, *, session: Session | None = None) -> None:
-    """공고를 북마크에 추가(멱등 — 이미 있으면 무시)."""
+# 북마크 4함수는 모두 member_id 를 첫 인자로 받고, 소유 술어(`member_id = :member_id`)를
+# **쿼리 안**에 둔다 — 호출부가 잊을 수 있는 컨트롤러 가드와 달리 모든 경로에서 성립한다(D14).
+def add_bookmark(member_id: int, pblanc_no: str, *, session: Session | None = None) -> None:
+    """회원의 북마크에 공고를 추가(멱등 — 이미 있으면 무시)."""
     own = session is None
     session = session or SessionLocal()
     try:
-        stmt = pg_insert(Bookmark).values(pblanc_no=pblanc_no)
-        stmt = stmt.on_conflict_do_nothing(index_elements=["pblanc_no"])
+        stmt = pg_insert(Bookmark).values(member_id=member_id, pblanc_no=pblanc_no)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["member_id", "pblanc_no"])
         session.execute(stmt)
         session.commit()
     finally:
@@ -526,25 +595,37 @@ def add_bookmark(pblanc_no: str, *, session: Session | None = None) -> None:
             session.close()
 
 
-def remove_bookmark(pblanc_no: str, *, session: Session | None = None) -> None:
-    """북마크 해제(없어도 에러 없음 — 멱등)."""
+def remove_bookmark(member_id: int, pblanc_no: str, *, session: Session | None = None) -> None:
+    """회원의 북마크 해제(없어도, 남의 것이어도 에러 없이 0건 — 멱등)."""
     own = session is None
     session = session or SessionLocal()
     try:
-        session.execute(delete(Bookmark).where(Bookmark.pblanc_no == pblanc_no))
+        session.execute(
+            delete(Bookmark).where(
+                Bookmark.member_id == member_id, Bookmark.pblanc_no == pblanc_no
+            )
+        )
         session.commit()
     finally:
         if own:
             session.close()
 
 
-def is_bookmarked(pblanc_no: str, *, session: Session) -> bool:
+def is_bookmarked(member_id: int, pblanc_no: str, *, session: Session) -> bool:
     return (
-        session.scalar(select(Bookmark.pblanc_no).where(Bookmark.pblanc_no == pblanc_no))
+        session.scalar(
+            select(Bookmark.pblanc_no).where(
+                Bookmark.member_id == member_id, Bookmark.pblanc_no == pblanc_no
+            )
+        )
         is not None
     )
 
 
-def bookmarked_pblanc_nos(*, session: Session) -> set[str]:
-    """북마크된 공고번호 집합."""
-    return set(session.scalars(select(Bookmark.pblanc_no)).all())
+def bookmarked_pblanc_nos(member_id: int, *, session: Session) -> set[str]:
+    """그 회원이 북마크한 공고번호 집합."""
+    return set(
+        session.scalars(
+            select(Bookmark.pblanc_no).where(Bookmark.member_id == member_id)
+        ).all()
+    )

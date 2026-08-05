@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}내 프로필 · 청약 알리미{% endblock %}
+
+{% block head %}
+<style>
+  /* 페이지 로컬 레이아웃 헬퍼 — 값은 전부 base 토큰 참조 */
+  .wrap{max-width:720px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  @media (max-width:640px){ .grid{grid-template-columns:1fr} }
+  select{width:100%;padding:13px 14px;border:1px solid var(--hairline);border-radius:var(--r-md);
+    font-size:15px;background:var(--canvas);color:var(--ink);font-family:inherit;outline:none}
+  select:focus{border-color:var(--ink)}
+  select.invalid{border-color:var(--danger)}
+  /* 체크박스는 라벨을 옆에 두는 인라인 배치(base의 block label 오버라이드) */
+  .check{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .check input{width:auto;padding:0}
+  .check label{margin:0;font-weight:600}
+  .hint{color:var(--muted);font-size:12.5px;margin:-6px 0 14px}
+  .saved{background:#E6F6EE;color:#136c3a;border-radius:var(--r-md);padding:11px 13px;
+    font-size:13.5px;font-weight:700;margin-bottom:16px}
+  .actions{display:flex;justify-content:flex-end;margin-top:4px}
+</style>
+{% endblock %}
+
+{% block content %}
+{# 텍스트/숫자/날짜 필드 — 오류는 필드 바로 아래 같은 슬롯에 인라인 표시(aria로 연결) #}
+{% macro field(name, label, type="text", placeholder="", suffix="") %}
+<div class="field{{ ' has-error' if errors.get(name) else '' }}">
+  <label for="f-{{ name }}">{{ label }}{% if suffix %} <span class="muted">({{ suffix }})</span>{% endif %}</label>
+  <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}"
+         value="{{ values.get(name, '') }}"
+         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+         {% if type == 'number' %}min="0" inputmode="numeric"{% endif %}
+         class="{{ 'invalid' if errors.get(name) else '' }}"
+         {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+  <p class="field-error" id="e-{{ name }}">{{ errors.get(name, '') }}</p>
+</div>
+{% endmacro %}
+
+{# 체크박스 — 미체크면 브라우저가 전송하지 않으므로 서버 기본값 False 와 의미가 같다 #}
+{% macro check(name, label) %}
+<div class="check">
+  <input id="f-{{ name }}" name="{{ name }}" type="checkbox" value="on"
+         {{ 'checked' if values.get(name) else '' }}>
+  <label for="f-{{ name }}">{{ label }}</label>
+</div>
+{% endmacro %}
+
+<div class="head" style="margin:6px 0 14px">
+  <h1>내 프로필</h1>
+</div>
+<p class="sub" style="margin:0 0 18px">
+  여기 입력한 값으로 공고마다 내 순위와 해당지역 여부를 계산합니다.
+</p>
+
+{% if saved %}<div class="saved" role="status">프로필을 저장했습니다.</div>{% endif %}
+{% if errors %}
+<div class="form-error" role="alert">입력값을 확인해주세요 — 아래 표시된 항목을 고치면 저장됩니다.</div>
+{% endif %}
+
+{# member_id 는 폼에 두지 않는다 — 저장 대상은 언제나 세션의 로그인 회원이다(D14) #}
+<form method="post" action="/profile" novalidate>
+  <section class="section">
+    <h2>기본</h2>
+    <div class="grid">
+      {{ field("birth_date", "생년월일", type="date", placeholder="YYYY-MM-DD") }}
+      {{ field("region", "거주 시/도", placeholder="예: 서울") }}
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>세대</h2>
+    <div class="field{{ ' has-error' if errors.get('household_type') else '' }}">
+      <label for="f-household_type">세대유형</label>
+      <select id="f-household_type" name="household_type"
+              class="{{ 'invalid' if errors.get('household_type') else '' }}"
+              {% if errors.get('household_type') %}aria-invalid="true" aria-describedby="e-household_type"{% endif %}>
+        {% for value, label in household_types %}
+        <option value="{{ value }}"{{ ' selected' if values.get('household_type') == value else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="field-error" id="e-household_type">{{ errors.get('household_type', '') }}</p>
+    </div>
+    <div class="grid">
+      {{ field("marriage_date", "혼인신고일", type="date", placeholder="YYYY-MM-DD") }}
+      {{ field("homeless_since", "무주택 시작일", type="date", placeholder="YYYY-MM-DD") }}
+      {{ field("dependents", "부양가족 수", type="number", suffix="명") }}
+      {{ field("children_minor", "미성년 자녀 수", type="number", suffix="명") }}
+      {{ field("real_estate_manwon", "부동산 가액", type="number", suffix="만원") }}
+      {{ field("car_value_manwon", "자동차 가액", type="number", suffix="만원") }}
+    </div>
+    {{ check("engaged", "예비 신혼(혼인 예정)") }}
+    {{ check("is_household_head", "세대주") }}
+    {{ check("household_all_homeless", "세대원 전원 무주택") }}
+    {{ check("household_head_owns_home", "세대주가 주택 보유") }}
+    {{ check("won_within_5y", "최근 5년 내 당첨 이력") }}
+  </section>
+
+  <section class="section">
+    <h2>청약통장</h2>
+    <div class="grid">
+      {{ field("account_opened", "가입일", type="date", placeholder="YYYY-MM-DD") }}
+      {{ field("account_balance_manwon", "예치금", type="number", suffix="만원") }}
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>소득</h2>
+    <div class="grid">
+      {{ field("income_monthly_manwon", "월평균 소득", type="number", suffix="만원") }}
+      {{ field("income_base_manwon", "기준 소득", type="number", suffix="만원") }}
+    </div>
+    {{ check("income_dual", "맞벌이") }}
+  </section>
+
+  <section class="section">
+    <h2>생애최초</h2>
+    {{ check("is_first_home", "생애최초 특별공급 대상") }}
+    {{ check("fl_ever_owned_house", "과거 주택 소유 이력 있음") }}
+    {{ check("fl_income_tax_5y", "5년 이상 소득세 납부") }}
+    {{ check("fl_currently_earning", "현재 소득 활동 중") }}
+  </section>
+
+  <section class="section">
+    <h2>지역</h2>
+    <p class="hint" id="couple-hint"{% if values.get('household_type') not in couple_types %} hidden{% endif %}>
+      신혼·예비신혼은 <b>두 사람</b>의 거주지와 소득본거지를 모두 콤마로 구분해 입력해주세요.
+      (예: <code>서울, 성남시</code>)
+    </p>
+    {{ field("residence_regions", "거주지", placeholder="콤마로 구분 · 예: 서울, 경기") }}
+    {{ field("income_base_regions", "소득본거지", placeholder="콤마로 구분 · 예: 성남시") }}
+    {{ field("interest_regions", "관심지역", placeholder="비우면 전체 지역을 봅니다") }}
+  </section>
+
+  <div class="actions">
+    <button type="submit" class="btn btn-primary">저장</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 세대유형이 신혼/예비신혼일 때만 "두 사람 입력" 안내를 보여준다(순수 화면 상태).
+(function () {
+  var sel = document.getElementById("f-household_type");
+  var hint = document.getElementById("couple-hint");
+  if (!sel || !hint) return;
+  var couple = ["newlywed", "pre_newlywed"];
+  function sync() { hint.hidden = couple.indexOf(sel.value) === -1; }
+  sel.addEventListener("change", sync);
+  sync();
+})();
+</script>
+{% endblock %}
