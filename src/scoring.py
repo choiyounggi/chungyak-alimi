@@ -14,6 +14,8 @@ LOTTERY_ASSET_CAP_MANWON = 33_100
 # 신혼부부 특공 소득 상한(% of 도시근로자 월평균소득): (외벌이, 맞벌이)
 NEWLYWED_PRIORITY_PCT = (100, 120)  # 우선공급
 NEWLYWED_GENERAL_PCT = (140, 160)  # 일반공급
+# 신혼부부 인정기간(년) — 폼 검증(R4)과 judge_newlywed 이 같은 값을 본다
+NEWLYWED_MAX_YEARS = 7
 # 생애최초 특공 소득 상한(%)
 FIRSTLIFE_PRIORITY_PCT = 130
 FIRSTLIFE_GENERAL_PCT = 160
@@ -131,6 +133,14 @@ def load_profile(path: str = "config/profile.yaml") -> Profile | None:
 
 def _full_years(start: date, end: date) -> float:
     return max(0.0, (end - start).days / 365.25)
+
+
+def newlywed_period_exceeded(marriage_date: date | None, today: date | None = None) -> bool:
+    """혼인 인정기간(7년) 초과 여부. judge_newlywed 과 같은 계산을 쓴다 —
+    폼 검증과 특공 판정이 서로 다른 답을 내면 안 된다(R4)."""
+    if marriage_date is None:
+        return False
+    return _full_years(marriage_date, today or date.today()) > NEWLYWED_MAX_YEARS
 
 
 def homeless_years(p: Profile, today: date) -> float:
@@ -397,8 +407,8 @@ def judge_newlywed(p: Profile, today: date | None = None) -> dict:
     if p.marriage_date is None and not p.engaged:
         return {"eligible": False, "tier": None, "reasons": ["미혼"]}
     my = _full_years(p.marriage_date, today) if p.marriage_date else 0.0
-    if my > 7:
-        reasons.append(f"혼인 {my:.1f}년(>7년)")
+    if newlywed_period_exceeded(p.marriage_date, today):
+        reasons.append(f"혼인 {my:.1f}년(>{NEWLYWED_MAX_YEARS}년)")
     if not p.household_all_homeless:
         reasons.append("무주택세대 아님")
     if any(pt.owns_home for pt in p.partners):

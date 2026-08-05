@@ -46,6 +46,44 @@
 </script>
 {% endmacro %}
 
+{# 텍스트/숫자/날짜 필드 — 오류는 필드 바로 아래 같은 슬롯에 인라인 표시(aria로 연결).
+   ambient 컨텍스트의 values/errors 를 읽으므로 반드시 `with context` 로 import 할 것. #}
+{% macro field(name, label, type="text", placeholder="", suffix="") %}
+<div class="field{{ ' has-error' if errors.get(name) else '' }}">
+  <label for="f-{{ name }}">{{ label }}{% if suffix %} <span class="muted">({{ suffix }})</span>{% endif %}</label>
+  <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}"
+         value="{{ values.get(name, '') }}"
+         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+         {% if type == 'number' %}min="0" inputmode="numeric"{% endif %}
+         class="{{ 'invalid' if errors.get(name) else '' }}"
+         {% if errors.get(name) %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+  <p class="field-error" id="e-{{ name }}">{{ errors.get(name, '') }}</p>
+</div>
+{% endmacro %}
+
+{# 체크박스 — 미체크면 브라우저가 전송하지 않으므로 서버 기본값 False 와 의미가 같다 #}
+{% macro check(name, label) %}
+<div class="check">
+  <input id="f-{{ name }}" name="{{ name }}" type="checkbox" value="on"
+         {{ 'checked' if values.get(name) else '' }}>
+  <label for="f-{{ name }}">{{ label }}</label>
+</div>
+{% endmacro %}
+
+{# 온보딩 스텝 표시 — 이동은 링크(<a href>)로, 현재 위치는 aria-current="step" 으로 알린다.
+   reached 이하의 완료 스텝만 링크가 되고 아직 못 간 스텝은 텍스트로 남는다. #}
+{% macro step_nav(current, reached) %}
+<ol class="steps">
+  {% for n, title in [(1, "기본·세대"), (2, "자산·통장·소득"), (3, "지역·선호·파트너")] %}
+  <li class="step{{ ' step--current' if n == current else '' }}"
+      {% if n == current %}aria-current="step"{% endif %}>
+    {% if n <= reached and n != current %}<a href="/onboarding/{{ n }}">{{ n }}. {{ title }}</a>
+    {% else %}<span>{{ n }}. {{ title }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
 {# 공고 카드(대시보드·북마크 페이지 공용). it = app.py _dashboard_item dict. #}
 {% macro notice_card(it) %}
 {% set n = it.notice %}

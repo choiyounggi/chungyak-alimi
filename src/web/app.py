@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from datetime import date
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -31,8 +31,18 @@ from ..filters import load_filter_config
 from ..members import get_profile, profile_from_member, update_profile
 from ..regions import region_matches
 from ..scoring import judge_notice, judge_rank, judge_rank_public, load_profile
-from . import auth
+from . import auth, onboarding
 from .auth import current_member_id, require_login
+from .forms import (
+    COUPLE_HOUSEHOLD_TYPES,
+    HOUSEHOLD_TYPES,
+    _Count,
+    _field_error,
+    _OptCount,
+    _OptDate,
+    _REGION_FIELDS,
+    _Regions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +62,7 @@ _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 init_db()
 
 app.include_router(auth.router)
+app.include_router(onboarding.router)
 
 # 특별공급 세대수 필드(raw) → 라벨
 SPECIAL_SUPPLY_LABELS = {
@@ -356,56 +367,7 @@ def notice_detail_data(session, n) -> dict:
 
 
 # ── 프로필 폼(Task 10) ────────────────────────────────────────────────────────
-
-# 세대유형 — DB CHECK 제약(ck_member_profile_household_type)과 같은 닫힌 4값(D7).
-HOUSEHOLD_TYPES: tuple[tuple[str, str], ...] = (
-    ("general", "일반"),
-    ("newlywed", "신혼부부"),
-    ("pre_newlywed", "예비신혼부부"),
-    ("youth", "청년"),
-)
-# 두 사람의 거주지·소득본거지를 함께 입력받아야 하는 세대유형
-COUPLE_HOUSEHOLD_TYPES: tuple[str, ...] = ("newlywed", "pre_newlywed")
-
-_DATE_FIELDS = frozenset({"birth_date", "marriage_date", "homeless_since", "account_opened"})
-_NUMBER_FIELDS = frozenset(
-    {
-        "dependents", "children_minor", "real_estate_manwon", "account_balance_manwon",
-        "income_monthly_manwon", "income_base_manwon", "car_value_manwon",
-    }
-)
-_REGION_FIELDS = frozenset({"residence_regions", "income_base_regions", "interest_regions"})
-
-
-def _blank_to(default):
-    """빈 문자열(미입력)을 그 필드의 '값 없음'으로 접는다 — 폼은 미입력도 ''로 보낸다."""
-
-    def convert(v):
-        return default if isinstance(v, str) and not v.strip() else v
-
-    return convert
-
-
-def _split_regions(v):
-    """콤마 구분 문자열 → list[str](공백 트림, 빈 항목 제거). 빈 입력은 []."""
-    if isinstance(v, str):
-        return [s.strip() for s in v.split(",") if s.strip()]
-    return v
-
-
-_OptDate = Annotated[date | None, BeforeValidator(_blank_to(None))]
-# ge 는 Optional 의 **안쪽 int** 에 붙여야 한다. Annotated[int | None, Field(ge=0)] 로 두면
-# 제약이 유니온 전체에 걸려 None 이 들어온 순간 `None >= 0` 으로 TypeError 가 난다.
-# 상한은 저장 컬럼(INTEGER)의 최대치 — 이걸 넘기면 검증을 통과하고도 INSERT 가 터진다.
-_INT_MAX = 2_147_483_647
-_NonNegInt = Annotated[int, Field(ge=0, le=_INT_MAX)]
-_Count = Annotated[_NonNegInt, BeforeValidator(_blank_to(0))]
-_OptCount = Annotated[_NonNegInt | None, BeforeValidator(_blank_to(None))]
-_Regions = Annotated[
-    list[Annotated[str, Field(max_length=50)]],
-    BeforeValidator(_split_regions),
-    Field(max_length=20),
-]
+# 필드 애너테이션·헬퍼는 온보딩 폼과 공유하려고 `forms.py` 로 옮겼다(O6).
 
 
 class ProfileForm(BaseModel):
@@ -448,19 +410,6 @@ class ProfileForm(BaseModel):
     residence_regions: _Regions = []
     income_base_regions: _Regions = []
     interest_regions: _Regions = []
-
-
-def _field_error(field: str) -> str:
-    """필드별 오류 문구 — '무엇이 틀렸나'가 아니라 '무엇을 하면 되나'를 적는다."""
-    if field in _DATE_FIELDS:
-        return "날짜를 YYYY-MM-DD 형식으로 입력해주세요"
-    if field in _NUMBER_FIELDS:
-        return f"0 이상의 숫자를 입력해주세요(최대 {_INT_MAX:,})"
-    if field == "household_type":
-        return "세대유형을 목록에서 선택해주세요"
-    if field in _REGION_FIELDS:
-        return "지역은 콤마로 구분해 20개까지, 각 50자 이내로 입력해주세요"
-    return "입력값을 확인해주세요"
 
 
 def _profile_form_values(prof: MemberProfile | None) -> dict:
@@ -573,6 +522,7 @@ def index(request: Request, member_id: int = Depends(require_login)):
         items = member_dashboard(session, member_id)
         prof = get_profile(member_id, session=session)
         interest_regions = list(prof.interest_regions or []) if prof is not None else []
+        onboarding_step = prof.onboarding_step if prof is not None else 0
     return _TEMPLATES.TemplateResponse(
         request,
         "index.html",
@@ -583,6 +533,8 @@ def index(request: Request, member_id: int = Depends(require_login)):
             "kakao_key": settings.kakao_js_key,
             "agencies": AGENCIES,
             "interest_regions": interest_regions,
+            # 온보딩 미완성 배너용(O5) — base.html 이 3 미만일 때만 이어하기 링크를 띄운다.
+            "onboarding_step": onboarding_step,
         },
     )
 

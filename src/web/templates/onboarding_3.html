@@ -1,0 +1,130 @@
+{% extends "_onboarding_base.html" %}
+{% from "_macros.html" import field, check with context %}
+
+{% block fields %}
+<section class="section">
+  <h2>지역별 거주기간</h2>
+  <p class="hint">
+    살았던 지역과 그 지역 거주 시작일을 넣어주세요. 기간은 조회 시점에 계산합니다(최대 {{ max_rows }}개).
+  </p>
+  {# 행은 서버가 늘 max_rows 개를 렌더하고 남는 행에만 hidden 을 건다. JS 는 hidden 을 벗기기만
+     하므로 DOM 을 문자열로 조립하지 않고, JS 가 없어도 첫 행은 그대로 제출된다. #}
+  <div id="res-rows" class="field{{ ' has-error' if errors.get('residence_history') else '' }}">
+    {% set visible = [rows|length, 1]|max %}
+    {% for i in range(max_rows) %}
+    <div class="res-row"{% if i >= visible %} hidden{% endif %}>
+      <div class="field">
+        <label for="f-residence_region-{{ i }}">거주 지역</label>
+        <input id="f-residence_region-{{ i }}" name="residence_region" type="text"
+               value="{{ rows[i].region if i < rows|length else '' }}"
+               placeholder="예: 서울"
+               class="{{ 'invalid' if errors.get('residence_history') else '' }}"
+               {% if errors.get('residence_history') %}aria-invalid="true" aria-describedby="e-residence_history"{% endif %}>
+      </div>
+      <div class="field">
+        <label for="f-residence_since-{{ i }}">거주 시작일</label>
+        <input id="f-residence_since-{{ i }}" name="residence_since" type="date"
+               value="{{ rows[i].since if i < rows|length else '' }}"
+               placeholder="YYYY-MM-DD"
+               class="{{ 'invalid' if errors.get('residence_history') else '' }}"
+               {% if errors.get('residence_history') %}aria-invalid="true" aria-describedby="e-residence_history"{% endif %}>
+      </div>
+    </div>
+    {% endfor %}
+    <p class="field-error" id="e-residence_history">{{ errors.get('residence_history', '') }}</p>
+  </div>
+  <button type="button" id="add-res-row" class="btn-add">행 추가</button>
+</section>
+
+<section class="section">
+  <h2>지역</h2>
+  {{ field("income_base_regions", "소득본거지", placeholder="콤마로 구분 · 예: 성남시") }}
+  {{ field("interest_regions", "관심지역", placeholder="비우면 전체 지역을 봅니다") }}
+</section>
+
+<section class="section">
+  <h2>선호 전형</h2>
+  <fieldset class="{{ 'has-error' if errors.get('preferred_types') else '' }}">
+    <legend>선호 전형(복수 선택)</legend>
+    {% for value, label in preferred_type_labels %}
+    <div class="check">
+      <input id="f-preferred_types-{{ value }}" name="preferred_types" type="checkbox"
+             value="{{ value }}"{{ ' checked' if value in preferred else '' }}
+             {% if errors.get('preferred_types') %}aria-invalid="true" aria-describedby="e-preferred_types"{% endif %}>
+      <label for="f-preferred_types-{{ value }}">{{ label }}</label>
+    </div>
+    {% endfor %}
+    <div class="field{{ ' has-error' if errors.get('preferred_types') else '' }}">
+      <p class="field-error" id="e-preferred_types">{{ errors.get('preferred_types', '') }}</p>
+    </div>
+  </fieldset>
+
+  {# 예비신혼부부를 고른 경우에만 보이는 두 사람 블록. JS 없이도 재렌더로 도달할 수 있다. #}
+  <fieldset id="partners-block"{% if 'pre_newlywed' not in preferred %} hidden{% endif %}>
+    <legend>예비신혼부부 — 두 사람 정보</legend>
+    {% for p in partner_rows %}
+    <fieldset>
+      <legend>{{ p.label }}</legend>
+      <div class="grid">
+        <div class="field">
+          <label for="f-partner_{{ loop.index0 }}_residence_region">거주지</label>
+          <input id="f-partner_{{ loop.index0 }}_residence_region"
+                 name="partner_{{ loop.index0 }}_residence_region" type="text"
+                 value="{{ p.residence_region }}" placeholder="예: 서울"
+                 class="{{ 'invalid' if errors.get('partners') else '' }}"
+                 {% if errors.get('partners') %}aria-invalid="true" aria-describedby="e-partners"{% endif %}>
+        </div>
+        <div class="field">
+          <label for="f-partner_{{ loop.index0 }}_income_base_region">소득본거지</label>
+          <input id="f-partner_{{ loop.index0 }}_income_base_region"
+                 name="partner_{{ loop.index0 }}_income_base_region" type="text"
+                 value="{{ p.income_base_region }}" placeholder="예: 성남시">
+        </div>
+      </div>
+      <div class="check">
+        <input id="f-partner_{{ loop.index0 }}_lives_with_parents"
+               name="partner_{{ loop.index0 }}_lives_with_parents" type="checkbox" value="on"
+               {{ 'checked' if p.lives_with_parents else '' }}>
+        <label for="f-partner_{{ loop.index0 }}_lives_with_parents">부모와 동거(미독립)</label>
+      </div>
+      <div class="check">
+        <input id="f-partner_{{ loop.index0 }}_owns_home"
+               name="partner_{{ loop.index0 }}_owns_home" type="checkbox" value="on"
+               {{ 'checked' if p.owns_home else '' }}>
+        <label for="f-partner_{{ loop.index0 }}_owns_home">자가 보유</label>
+      </div>
+    </fieldset>
+    {% endfor %}
+    <div class="field{{ ' has-error' if errors.get('partners') else '' }}">
+      <p class="field-error" id="e-partners">{{ errors.get('partners', '') }}</p>
+    </div>
+  </fieldset>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 거주이력: 숨겨진 다음 행의 hidden 만 벗긴다(DOM 조립 없음).
+(function () {
+  var btn = document.getElementById("add-res-row");
+  var box = document.getElementById("res-rows");
+  if (!btn || !box) return;
+  btn.addEventListener("click", function () {
+    var next = box.querySelector(".res-row[hidden]");
+    if (next) next.hidden = false;
+    btn.disabled = !box.querySelector(".res-row[hidden]");
+  });
+  btn.disabled = !box.querySelector(".res-row[hidden]");
+})();
+
+// 예비신혼부부 체크 시에만 두 사람 블록을 보여준다(속성 토글만).
+(function () {
+  var box = document.getElementById("f-preferred_types-pre_newlywed");
+  var block = document.getElementById("partners-block");
+  if (!box || !block) return;
+  function sync() { block.hidden = !box.checked; }
+  box.addEventListener("change", sync);
+  sync();
+})();
+</script>
+{% endblock %}
