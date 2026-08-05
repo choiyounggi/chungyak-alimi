@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from .regions import region_matches
 
@@ -44,6 +44,48 @@ class FirstLifeInfo(BaseModel):
     currently_earning: bool = False  # 현재 근로/사업소득
 
 
+# 선호 전형(복수선택) 허용값 — 쓰기 경계(members.update_profile)에서 이 집합으로 거른다(D4).
+PREFERRED_TYPES: frozenset[str] = frozenset(
+    {"newlywed", "pre_newlywed", "youth", "special", "general"}
+)
+
+
+def _drop_none(data):
+    """JSONB 에 남은 None 을 지워 필드 기본값이 적용되게 한다.
+
+    부분 입력·구버전 행 하나가 ValidationError 를 내면 프로필 조회 전체가 죽는다.
+    호출부마다 sanitize 하는 대신 모델 자체를 넓혀 관용을 한 곳에 모은다.
+    """
+    return {k: v for k, v in data.items() if v is not None} if isinstance(data, dict) else data
+
+
+class ResidencePeriod(BaseModel):
+    """지역별 거주 시작일. 기간(년수)은 저장하지 않고 조회 시 today - since 로 계산한다(D2)."""
+
+    region: str = ""
+    since: date | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_none(cls, data):
+        return _drop_none(data)
+
+
+class PartnerInfo(BaseModel):
+    """예비신혼 상대방. 예비신혼은 아직 한 세대가 아니라 세대 필드와 따로 본다(R5)."""
+
+    label: str = ""
+    lives_with_parents: bool = False
+    owns_home: bool = False
+    residence_region: str = ""
+    income_base_region: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fold_none(cls, data):
+        return _drop_none(data)
+
+
 class Profile(BaseModel):
     birth_date: date | None = None
     marriage_date: date | None = None  # 혼인신고일(미혼 null)
@@ -59,6 +101,12 @@ class Profile(BaseModel):
     income: IncomeInfo = IncomeInfo()
     real_estate_manwon: int = 0  # 세대 부동산가액(만원, 추첨제 자산기준)
     first_life: FirstLifeInfo = FirstLifeInfo()
+    # 온보딩 확장(signup-hardening) — 판정 함수는 Task 03 이 소비한다
+    owns_car: bool = False  # 자차 보유(공공 특공 자산요건 판정 입력)
+    account_payment_count: int = 0  # 청약통장 납입횟수(국민주택 순위 요건)
+    residence_history: list[ResidencePeriod] = []  # 지역별 거주 시작일
+    preferred_types: list[str] = []  # 선호 전형(복수) — 값은 PREFERRED_TYPES
+    partners: list[PartnerInfo] = []  # 예비신혼 상대방(최대 2)
 
 
 def load_profile(path: str = "config/profile.yaml") -> Profile | None:
