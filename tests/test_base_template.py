@@ -40,7 +40,7 @@ REQUIRED_TOKEN_DEFS = [
 # 브리프 [컴포넌트 클래스] — 다운스트림(Wave 2)이 계약으로 의존하는 셀렉터 전부.
 # base(기본) 클래스와 변형(modifier)을 모두 명시적으로 검증한다.
 REQUIRED_SELECTORS = [
-    ".topbar", ".topbar .inner", ".topbar a", ".brand", ".wrap",
+    ".topbar", ".topbar .inner", ".topbar a", ".brand", ".wrap", ".toast", ".toast.is-on",
     ".btn", ".btn-primary", ".btn-secondary",
     ".card", ".section",
     ".badge", ".badge--soon", ".badge--mid", ".badge--far", ".badge--pre",
@@ -135,6 +135,39 @@ def test_base_topnav_and_bookmark_toggle_js():
     assert ".bookmark-btn.is-on .ic{fill:var(--accent-teal)}" in out
     # 카드는 우상단 절대배치의 기준(position:relative)
     assert "position:relative" in out
+
+
+# ── 실패 가시화: 북마크 요청이 실패하면 사용자에게 보여야 한다 ──
+def test_bookmark_failure_shows_toast():
+    """조용한 실패 금지 — 서버 500 을 프런트가 삼켜 '안 눌린다'로만 보였던 회귀를 막는다."""
+    out = _env().get_template("base.html").render()
+    # 토스트 자리와 표시 함수가 존재하고, catch 가 그 함수를 부른다
+    assert '<div id="toast" class="toast" role="status"></div>' in out
+    assert "function showToast(" in out
+    assert "북마크를 변경하지 못했어요" in out
+    assert re.search(r"\.catch\(function \(\) \{ showToast\(", out), "catch 가 토스트를 띄우지 않는다"
+    # 응답이 ok 가 아니면 성공 경로로 새지 않고 예외로 빠진다
+    assert "if (!r.ok) throw new Error(r.status);" in out
+
+
+# ── 에러 경로: 세션 만료(401)는 재시도가 아니라 로그인으로 ──
+def test_bookmark_401_redirects_to_login():
+    out = _env().get_template("base.html").render()
+    assert 'if (r.status === 401) { location.href = "/login"; return null; }' in out
+    # 401 로 이동하는 동안 성공 핸들러가 null 을 건드리지 않는다
+    assert "if (!d) return;" in out
+
+
+# ── 경계값: 토스트는 비어 있을 때 화면을 가리지 않는다 ──
+def test_toast_is_inert_when_empty():
+    out = _env().get_template("base.html").render()
+    m = re.search(r"\.toast\{[^}]*\}", out)
+    assert m, ".toast 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "opacity:0" in rule
+    assert "pointer-events:none" in rule
+    # 드러나는 것은 .is-on 일 때뿐
+    assert ".toast.is-on{opacity:1" in out
 
 
 # ── 정상: Jinja 블록 6개 이름 계약(정확히 이 이름) 존재 ──
