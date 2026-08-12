@@ -57,7 +57,7 @@ python3.13 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 
 - 로컬: 모든 시크릿은 `.env`(`.gitignore`로 차단). `.env.example`엔 placeholder만.
   - `ODCLOUD_API_KEY`, `TG_BOT_TOKEN`/`TG_CHAT_ID`, `POSTGRES_PASSWORD`
-  - 웹: `WEB_USER`/`WEB_PASSWORD`(로그인), `SESSION_SECRET`(세션 서명), `SESSION_HTTPS_ONLY`(프로덕션 true)
+  - 웹: `SESSION_SECRET`(세션 서명), `SESSION_HTTPS_ONLY`(프로덕션 true)
   - 지도: `KAKAO_JS_KEY`(도메인 제한), `VWORLD_KEY`(필지 폴리곤)
 - CI/CD: **GitHub Actions Secrets** — 위 값 + 배포용 `PI_HOST`/`PI_USER`/`PI_PORT`/`PI_SSH_KEY`.
 

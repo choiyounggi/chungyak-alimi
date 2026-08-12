@@ -115,26 +115,12 @@ REGULATION_FLAGS = {
     "LRSCL_BLDLND_AT": "대규모택지",
 }
 
-if not settings.web_user or not settings.web_password:
-    logger.warning(
-        "웹 인증 미설정(WEB_USER/WEB_PASSWORD 비어있음) — 공고 상세가 인증 없이 노출됩니다"
-        "(대시보드·북마크는 회원 로그인으로 보호됨)."
-    )
-elif settings.session_secret == _DEFAULT_SESSION_SECRET:
-    # 인증은 켰지만 세션 서명키가 기본값이면, 키를 아는 누구나 authed 쿠키를 위조해 우회 가능
+if settings.session_secret == _DEFAULT_SESSION_SECRET:
+    # 세션 서명키가 기본값이면, 키를 아는 누구나 member_id 쿠키를 위조해 로그인을 우회할 수 있다
     logger.warning(
         "SESSION_SECRET이 기본값입니다 — 세션 쿠키 위조로 인증 우회 위험. "
         ".env에 랜덤 SESSION_SECRET(예: openssl rand -hex 32)을 설정하세요."
     )
-
-
-def _auth_enabled() -> bool:
-    return bool(settings.web_user and settings.web_password)
-
-
-def _authed(request: Request) -> bool:
-    """인증이 꺼져있으면(로컬) 항상 통과, 켜져있으면 세션 로그인 여부."""
-    return not _auth_enabled() or request.session.get("authed") is True
 
 
 def _dashboard_item(
@@ -552,9 +538,7 @@ def bookmark_remove(pblanc_no: str, request: Request) -> dict:
 
 
 @app.get("/notice/{pblanc_no}")
-def notice_detail(pblanc_no: str, request: Request):
-    if not _authed(request):
-        return RedirectResponse("/login", status_code=303)
+def notice_detail(pblanc_no: str, request: Request, member_id: int = Depends(require_login)):
     with SessionLocal() as session:
         n = session.scalar(select(Notice).where(Notice.pblanc_no == pblanc_no))
         if n is None:
