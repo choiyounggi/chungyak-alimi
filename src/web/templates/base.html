@@ -150,6 +150,15 @@
     color:var(--ink);font-weight:700;text-decoration:none;white-space:nowrap}
   .onboarding-banner a:hover{text-decoration:underline}
 
+  /* 비동기 동작 실패를 알리는 공용 토스트. 빈 상태에서는 opacity:0 + pointer-events:none 이라
+     화면을 가리지 않는다(마크업은 항상 있고 .is-on 으로만 드러난다). */
+  .toast{position:fixed;left:50%;bottom:24px;z-index:1000;transform:translate(-50%,8px);
+    max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--r-pill);
+    background:var(--ink);color:var(--on-primary);font-size:13.5px;text-align:center;
+    box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:0;pointer-events:none;
+    transition:opacity .18s ease,transform .18s ease}
+  .toast.is-on{opacity:1;transform:translate(-50%,0)}
+
   /* 크림 푸터 (다크 아님) */
   .footer{background:var(--surface-soft);color:var(--body);border-top:1px solid var(--hairline-soft);
     padding:40px 20px;text-align:center;font-size:12px}
@@ -240,7 +249,21 @@
 
   {% block footer %}{% endblock %}
 
+  {# 실패를 조용히 넘기지 않기 위한 공용 토스트 자리. 내용은 JS 가 채운다. #}
+  <div id="toast" class="toast" role="status"></div>
+
   <script>
+  // 짧은 안내 토스트. 같은 요소를 재사용하고, 연속 호출 시 마지막 호출 기준으로 타이머를 다시 건다.
+  var toastTimer;
+  function showToast(message) {
+    var el = document.getElementById("toast");
+    if (!el) return;
+    el.textContent = message;
+    el.classList.add("is-on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("is-on"); }, 3200);
+  }
+
   // 북마크 토글: 카드·북마크 페이지의 .bookmark-btn 클릭 → PUT/DELETE 후 아이콘 상태 갱신.
   (function () {
     document.addEventListener("click", function (e) {
@@ -250,8 +273,14 @@
       var on = btn.getAttribute("aria-pressed") === "true";
       btn.disabled = true;
       fetch("/bookmark/" + encodeURIComponent(btn.dataset.pblanc), { method: on ? "DELETE" : "PUT" })
-        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (r) {
+          // 세션 만료(401)는 재시도해도 소용없다 — 로그인으로 보낸다.
+          if (r.status === 401) { location.href = "/login"; return null; }
+          if (!r.ok) throw new Error(r.status);
+          return r.json();
+        })
         .then(function (d) {
+          if (!d) return;  // 401 로 이동 중
           var nowOn = !!d.bookmarked;
           btn.setAttribute("aria-pressed", nowOn ? "true" : "false");
           btn.classList.toggle("is-on", nowOn);
@@ -261,7 +290,8 @@
             if (card && card.parentNode) card.parentNode.removeChild(card);
           }
         })
-        .catch(function () { /* 실패 시 상태 유지 */ })
+        // 실패하면 아이콘 상태는 그대로 두고(서버 상태와 어긋나지 않게) 실패 자체를 알린다.
+        .catch(function () { showToast("북마크를 변경하지 못했어요. 잠시 후 다시 시도해주세요."); })
         .finally(function () { btn.disabled = false; });
     });
   })();
