@@ -330,7 +330,18 @@ def _ensure_bookmark_member_scope(conn) -> None:
     if pk_cols == {"member_id", "pblanc_no"}:
         return
     if conn.exec_driver_sql("SELECT 1 FROM bookmark WHERE member_id IS NULL LIMIT 1").first():
-        return  # 이관 전 전역 행이 남아 있음 — 이관 후에 재구성한다
+        # 전역 시절 행은 그때의 단일 운영자가 남긴 것이므로 최초 가입 회원에게 귀속시킨다.
+        # 여기서 스스로 이관하지 않으면 재구성이 영구히 멈춘다 —
+        # migrate_global_bookmarks_to_member 를 부르는 프로덕션 경로가 없기 때문이다.
+        # 멈춘 동안에는 복합 PK 가 없어 add_bookmark 의 on_conflict 가 매칭 제약을 찾지 못해
+        # 북마크 추가가 계속 실패한다.
+        owner = conn.exec_driver_sql("SELECT id FROM member ORDER BY id LIMIT 1").scalar()
+        if owner is None:
+            return  # 회원이 없어 귀속 대상을 정할 수 없다 — 행을 지우지 않고 다음 기동으로 미룬다
+        conn.execute(
+            text("UPDATE bookmark SET member_id = :owner WHERE member_id IS NULL"),
+            {"owner": owner},
+        )
     conn.exec_driver_sql("ALTER TABLE bookmark ALTER COLUMN member_id SET NOT NULL")
     conn.exec_driver_sql("ALTER TABLE bookmark DROP CONSTRAINT IF EXISTS bookmark_pkey")
     conn.exec_driver_sql("ALTER TABLE bookmark ADD PRIMARY KEY (member_id, pblanc_no)")
