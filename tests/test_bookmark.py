@@ -214,6 +214,64 @@ def test_migrate_global_bookmarks_to_member(seeded):
         init_db()  # 스키마를 정상 상태로 되돌려 뒤 테스트에 영향 없게
 
 
+# ── 회귀: 전역 시절 행이 남은 배포 DB 에서도 기동만으로 재구성이 끝난다 ──
+def test_init_db_claims_orphan_bookmarks_and_rebuilds_pk(seeded):
+    """member_id NULL 행이 남아 있으면 복합 PK 를 못 걸어 북마크 추가가 영구히 실패했다.
+
+    이관을 부르는 프로덕션 경로가 없어 재구성이 멈춰 있었고, on_conflict 가 매칭
+    제약을 찾지 못해 PUT /bookmark 가 500 을 냈다. 기동(init_db)만으로 풀려야 한다.
+    """
+    _s, a, _b = seeded
+    try:
+        with engine.begin() as c:  # 전역 북마크 시절 스키마/행 재현
+            c.exec_driver_sql("ALTER TABLE bookmark DROP CONSTRAINT bookmark_pkey")
+            c.exec_driver_sql("ALTER TABLE bookmark ALTER COLUMN member_id DROP NOT NULL")
+            c.exec_driver_sql("ALTER TABLE bookmark ADD PRIMARY KEY (pblanc_no)")
+            c.exec_driver_sql("INSERT INTO bookmark (pblanc_no) VALUES ('applyhome:B1')")
+
+        init_db()
+
+        assert _bookmark_pk_columns() == {"member_id", "pblanc_no"}
+        # 주인 없는 행은 최초 가입 회원(= 전역 시절 운영자)의 것으로 귀속된다
+        with SessionLocal() as s2:
+            first = s2.scalar(select(Member.id).order_by(Member.id).limit(1))
+            assert bookmarked_pblanc_nos(first, session=s2) == {"applyhome:B1"}
+        # 재구성이 끝났으니 on_conflict 경로(추가·중복 추가)가 다시 동작한다
+        with SessionLocal() as s2:
+            add_bookmark(a, "applyhome:B2", session=s2)
+            add_bookmark(a, "applyhome:B2", session=s2)  # 중복 추가는 무시(멱등)
+            assert "applyhome:B2" in bookmarked_pblanc_nos(a, session=s2)
+    finally:
+        with engine.begin() as c:
+            c.exec_driver_sql("DELETE FROM bookmark")
+        init_db()
+
+
+# ── 경계: 회원이 하나도 없으면 귀속 대상이 없어 재구성을 미룬다(예외 없이) ──
+def test_init_db_defers_rebuild_when_no_member(seeded):
+    _s, _a, _b = seeded
+    try:
+        with SessionLocal() as s2:  # 회원 전멸 상태를 만든다(북마크는 CASCADE 로 함께 삭제)
+            for t in (MemberProfile, Bookmark, Member):
+                s2.execute(delete(t))
+            s2.commit()
+        with engine.begin() as c:
+            c.exec_driver_sql("ALTER TABLE bookmark DROP CONSTRAINT bookmark_pkey")
+            c.exec_driver_sql("ALTER TABLE bookmark ALTER COLUMN member_id DROP NOT NULL")
+            c.exec_driver_sql("ALTER TABLE bookmark ADD PRIMARY KEY (pblanc_no)")
+            c.exec_driver_sql("INSERT INTO bookmark (pblanc_no) VALUES ('applyhome:B1')")
+
+        init_db()  # 예외 없이 통과하고
+
+        assert _bookmark_pk_columns() == {"pblanc_no"}  # 재구성은 보류되며
+        with engine.connect() as c:  # 주인 없는 행을 임의로 지우지 않는다
+            assert c.exec_driver_sql("SELECT count(*) FROM bookmark").scalar() == 1
+    finally:
+        with engine.begin() as c:
+            c.exec_driver_sql("DELETE FROM bookmark")
+        init_db()
+
+
 # ── 경계: 이관할 게 없는(신규) DB 에서도 예외 없이 0건 ──
 def test_migrate_on_clean_db_is_noop(seeded):
     _s, a, _b = seeded
