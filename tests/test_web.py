@@ -104,9 +104,23 @@ def test_index_filter_chips(seeded):
     assert "js-empty" in r.text
 
 
+# ── 상세: 회원 로그인 게이트 ──
+def test_detail_allows_logged_in_member(seeded):
+    """로그인한 회원은 상세를 그대로 본다 — 목록에서 눌렀는데 로그인 화면으로 튕기지 않는다."""
+    r = login_client().get("/notice/applyhome:W1", follow_redirects=False)
+    assert r.status_code == 200
+
+
+def test_detail_redirects_anonymous_to_login(seeded):
+    """미로그인은 다른 보호 페이지와 동일하게 /login 으로 303."""
+    r = TestClient(app).get("/notice/applyhome:W1", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/login"
+
+
 # ── 상세 페이지: 렌더 + 주택형/특공 표시 ──
 def test_detail_renders(seeded):
-    client = TestClient(app)
+    client = login_client()
     r = client.get("/notice/applyhome:W1")
     assert r.status_code == 200
     assert SAMPLE["HOUSE_NM"] in r.text
@@ -131,7 +145,8 @@ def test_detail_lh_images_and_files(seeded):
     )
     upsert_notices([n], source="lh", session=seeded)
     save_match_results([("lh:LHW1", True, [])], session=seeded)
-    r = TestClient(app).get("/notice/lh:LHW1")
+    client = login_client()
+    r = client.get("/notice/lh:LHW1")
     assert "단지 이미지" in r.text
     assert "lhImageView2.do?fileid=1" in r.text
     assert "단지조감도" in r.text
@@ -140,14 +155,14 @@ def test_detail_lh_images_and_files(seeded):
     assert 'id="lightbox"' in r.text
     assert "lb-prev" in r.text and "lb-next" in r.text
     # 이미지 없는 공고(W1)엔 갤러리·라이트박스 미노출 (경계값)
-    r2 = TestClient(app).get("/notice/applyhome:W1")
+    r2 = client.get("/notice/applyhome:W1")
     assert "단지 이미지" not in r2.text
     assert 'id="lightbox"' not in r2.text
 
 
 # ── 상세: 없는 공고 404 ──
 def test_detail_not_found():
-    assert TestClient(app).get("/notice/NOPE").status_code == 404
+    assert login_client().get("/notice/NOPE").status_code == 404
 
 
 # ── healthz (인증 불필요) ──
@@ -157,8 +172,8 @@ def test_healthz():
     assert r.json() == {"ok": True}
 
 
-# ── 인증: basic-auth(WEB_USER/WEB_PASSWORD) 제거 — 회원 세션 로그인으로 대체(Task 05).
-#    로그인/로그아웃/보호 라우트 플로우는 tests/test_auth_routes.py 가 검증한다.
+# ── 인증: 회원 세션 로그인 하나뿐 — 로그인/로그아웃/보호 라우트 플로우는
+#    tests/test_auth_routes.py 가 검증한다.
 
 
 # ── 상세: 카카오 지도(키 설정 시 렌더, 없으면 미렌더) ──
@@ -166,7 +181,7 @@ def test_detail_map(seeded, monkeypatch):
     from src.web import app as webapp
 
     monkeypatch.setattr(webapp.settings, "kakao_js_key", "TESTKAKAOKEY")
-    r = TestClient(app).get("/notice/applyhome:W1")
+    r = login_client().get("/notice/applyhome:W1")
     assert 'id="map"' in r.text
     assert "dapi.kakao.com" in r.text
     assert "TESTKAKAOKEY" in r.text
@@ -183,5 +198,5 @@ def test_detail_no_map_without_key(seeded, monkeypatch):
     from src.web import app as webapp
 
     monkeypatch.setattr(webapp.settings, "kakao_js_key", "")
-    r = TestClient(app).get("/notice/applyhome:W1")
+    r = login_client().get("/notice/applyhome:W1")
     assert 'id="map"' not in r.text

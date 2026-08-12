@@ -66,8 +66,7 @@ python3.13 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 - Local: every secret lives in `.env` (blocked by `.gitignore`). `.env.example`
   holds placeholders only.
   - `ODCLOUD_API_KEY`, `TG_BOT_TOKEN`/`TG_CHAT_ID`, `POSTGRES_PASSWORD`
-  - Web: `WEB_USER`/`WEB_PASSWORD` (login), `SESSION_SECRET` (session signing),
-    `SESSION_HTTPS_ONLY` (true in production)
+  - Web: `SESSION_SECRET` (session signing), `SESSION_HTTPS_ONLY` (true in production)
   - Maps: `KAKAO_JS_KEY` (domain-restricted), `VWORLD_KEY` (parcel polygons)
 - CI/CD: **GitHub Actions Secrets** — the above plus deploy credentials
   `PI_HOST`/`PI_USER`/`PI_PORT`/`PI_SSH_KEY`.
