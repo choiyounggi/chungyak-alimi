@@ -3,7 +3,8 @@ from __future__ import annotations
 import copy
 
 import pytest
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, insert, select, text
+from sqlalchemy.exc import IntegrityError
 
 from src.db import (
     Bookmark,
@@ -12,9 +13,11 @@ from src.db import (
     Notice,
     SessionLocal,
     engine,
+    get_notice_analysis,
     global_id,
     init_db,
     migrate_global_ids,
+    upsert_notice_analysis,
     upsert_notices,
 )
 from src.members import create_member, hash_password
@@ -206,3 +209,106 @@ def test_global_id_prefixes_even_when_native_contains_colon():
     assert global_id("gh", "LH:001") == "gh:LH:001"
     assert global_id("lh", "LH:001") == "lh:LH:001"
     assert global_id("lh", "lh:9") == "lh:9"  # 자기 접두사는 중복하지 않는다
+
+
+# ── notice_analysis: t2 — 공고 PDF 분석 결과 저장/조회 ──
+
+_SAMPLE_FILES = [
+    {
+        "name": "공고문.pdf",
+        "url": "https://example.org/a.pdf",
+        "ok": True,
+        "error": None,
+        "page_count": 3,
+        "text_chars": 120,
+        "sections": [{"key": "priority", "title": "1순위 조건", "lines": ["무주택 세대주"]}],
+    }
+]
+
+
+def _insert_notice(session, pblanc_no: str, source: str = "gh") -> None:
+    session.execute(
+        insert(Notice).values(pblanc_no=pblanc_no, source=source, house_nm="분석테스트", raw={})
+    )
+    session.commit()
+
+
+# ── 정상: upsert 후 조회하면 files 내용이 그대로 돌아온다 ──
+def test_upsert_and_get_notice_analysis(session):
+    _insert_notice(session, "gh:P1")
+    upsert_notice_analysis("gh:P1", "gh", _SAMPLE_FILES, session=session)
+    session.commit()
+
+    got = get_notice_analysis(session, "gh:P1")
+    assert got is not None
+    assert got.files == _SAMPLE_FILES
+    assert got.source == "gh"
+
+
+# ── 갱신: 같은 pblanc_no 로 재-upsert 하면 files 는 바뀌고 analyzed_at 은 보존된다(D4/D6) ──
+def test_notice_analysis_update_preserves_analyzed_at(session):
+    _insert_notice(session, "gh:P2")
+    upsert_notice_analysis("gh:P2", "gh", _SAMPLE_FILES, session=session)
+    session.commit()
+    first = get_notice_analysis(session, "gh:P2")
+    analyzed0 = first.analyzed_at
+    session.expire_all()
+
+    new_files = [{"name": "정정.pdf", "url": "https://example.org/b.pdf", "ok": True,
+                  "error": None, "page_count": 1, "text_chars": 10, "sections": []}]
+    upsert_notice_analysis("gh:P2", "gh", new_files, session=session)
+    session.commit()
+
+    after = get_notice_analysis(session, "gh:P2")
+    assert after.analyzed_at == analyzed0   # 최초 분석시각 보존
+    assert after.files == new_files          # 값은 갱신됨
+
+
+# ── 경계: 빈 files 도 저장 가능하고, 존재하지 않는 pblanc_no 조회는 None ──
+def test_notice_analysis_empty_files_and_missing_lookup(session):
+    _insert_notice(session, "gh:P3")
+    upsert_notice_analysis("gh:P3", "gh", [], session=session)
+    session.commit()
+
+    got = get_notice_analysis(session, "gh:P3")
+    assert got is not None
+    assert got.files == []
+    assert get_notice_analysis(session, "gh:NOPE") is None
+
+
+# ── 에러: notice 에 없는 pblanc_no 로 upsert → FK 위반(IntegrityError) ──
+def test_notice_analysis_fk_violation(session):
+    with pytest.raises(IntegrityError):
+        upsert_notice_analysis("gh:GHOST", "gh", [], session=session)
+    session.rollback()
+
+
+_ANALYSIS_COLUMNS = {
+    "pblanc_no": "character varying",
+    "source": "character varying",
+    "files": "jsonb",
+    "analyzed_at": "timestamp with time zone",
+    "updated_at": "timestamp with time zone",
+}
+
+
+# ── 카탈로그 검증(D5): 신규 테이블이 create_all 만으로 배포 DB 에 정확한 shape 로 도달한다 ──
+def test_notice_analysis_catalog_shape():
+    init_db()
+    with SessionLocal() as s:
+        rows = s.execute(
+            text(
+                "SELECT column_name, data_type, is_nullable, column_default"
+                " FROM information_schema.columns"
+                " WHERE table_name = 'notice_analysis' AND column_name = ANY(:names)"
+            ),
+            {"names": list(_ANALYSIS_COLUMNS)},
+        ).all()
+    found = {r[0]: r for r in rows}
+    assert set(found) == set(_ANALYSIS_COLUMNS)  # 5개 컬럼 전부 실제 DB 에 존재
+    for name, expected_type in _ANALYSIS_COLUMNS.items():
+        _, data_type, is_nullable, default = found[name]
+        assert data_type == expected_type, f"{name}: {data_type}"
+        assert is_nullable == "NO", f"{name} 이 NULL 허용 상태"
+    for name in ("files", "analyzed_at", "updated_at"):
+        assert found[name][3] is not None, f"{name} 에 server_default 없음"

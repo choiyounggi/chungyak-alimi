@@ -273,6 +273,26 @@ class MemberProfile(Base):
     )
 
 
+class NoticeAnalysis(Base):
+    """공고 PDF 분석 결과 — notice 와 1:1(pblanc_no 가 곧 PK 이자 FK, ON DELETE CASCADE).
+
+    `files` 원소 계약(t4 가 쓰고 t5 가 읽는 공유 shape):
+    {"name": str, "url": str, "ok": bool, "error": str | None,
+     "page_count": int, "text_chars": int,
+     "sections": [{"key": str, "title": str, "lines": [str]}]}
+    """
+
+    __tablename__ = "notice_analysis"
+
+    pblanc_no: Mapped[str] = mapped_column(
+        String, ForeignKey("notice.pblanc_no", ondelete="CASCADE"), primary_key=True
+    )
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    files: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 engine = create_engine(settings.database_url, future=True)
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
@@ -475,6 +495,40 @@ def upsert_notices(
     finally:
         if own:
             session.close()
+
+
+def upsert_notice_analysis(
+    pblanc_no: str, source: str, files: list[dict], *, session: Session | None = None
+) -> None:
+    """공고 PDF 분석 결과를 upsert. 충돌 시 files/source 만 갱신하고 analyzed_at 은 보존한다(D4/D6).
+
+    호출자 세션을 받은 경우(own=False)에는 commit 하지 않고 flush 만 한다 — 더 큰 트랜잭션
+    (t4 파이프라인)에 속할 수 있어 이 함수가 임의로 커밋을 확정지으면 안 된다.
+    """
+    own = session is None
+    session = session or SessionLocal()
+    try:
+        stmt = pg_insert(NoticeAnalysis).values(pblanc_no=pblanc_no, source=source, files=files)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["pblanc_no"],
+            set_={
+                "files": stmt.excluded.files,
+                "source": stmt.excluded.source,
+                "updated_at": func.now(),
+            },
+        )
+        session.execute(stmt)
+        if own:
+            session.commit()
+        else:
+            session.flush()
+    finally:
+        if own:
+            session.close()
+
+
+def get_notice_analysis(session: Session, pblanc_no: str) -> NoticeAnalysis | None:
+    return session.get(NoticeAnalysis, pblanc_no)
 
 
 def upsert_house_types(
