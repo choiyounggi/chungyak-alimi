@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+import httpx
 import pytest
 from sqlalchemy import delete, select
 
@@ -13,6 +14,7 @@ from src.db import (
     NotifyLog,
     SessionLocal,
     engine,
+    get_notice_analysis,
     global_id,
     init_db,
     save_match_results,
@@ -20,6 +22,7 @@ from src.db import (
 )
 from src.models import ApplyhomeNotice
 
+from test_analysis import _make_pdf
 from test_applyhome import SAMPLE
 
 
@@ -261,6 +264,210 @@ def test_enrich_lh_supply_skips_failed_row(monkeypatch):
     _cleanup()
 
 
+# ── PDF 요약 분석 대상 시딩 헬퍼 ──
+def _seed_pdf_candidate(source: str, native: str, urls: list[str]) -> str:
+    """LH/GH 공고 1건을 심고 raw 의 상세 파일 목록(files)을 지정 URL로 채운다."""
+    init_db()
+    if source == "lh":
+        from src.collectors.lh import LhNotice
+
+        gid = global_id("lh", native)
+        n = LhNotice.model_validate({
+            "PAN_ID": native, "PAN_NM": "테스트공고", "CNP_CD_NM": "경기도",
+            "CLSG_DT": "2026.08.01", "CCR_CNNT_SYS_DS_CD": "03",
+            "SPL_INF_TP_CD": "050", "UPP_AIS_TP_CD": "05", "AIS_TP_CD": "05",
+        })
+        detail_key = "_lh_detail"
+    else:
+        from src.collectors.gh import GhNotice
+
+        gid = global_id("gh", f"gh-{native}")
+        n = GhNotice.model_validate(
+            {"pbanc_no": native, "biz_ty": "임대", "biz_ty_cd": "01", "name": "테스트공고"}
+        )
+        detail_key = "_gh_detail"
+
+    with SessionLocal() as s:
+        for t in (NotifyLog, MatchResult, NoticeHouseType, Notice):
+            s.execute(delete(t))
+        s.commit()
+        upsert_notices([n], source=source, session=s)
+        files = [{"label": None, "name": f"f{i}.pdf", "url": u} for i, u in enumerate(urls)]
+        row = s.scalar(select(Notice).where(Notice.pblanc_no == gid))
+        raw = {**(row.raw or {}), detail_key: {"files": files}}
+        s.execute(pipeline.update(Notice).where(Notice.pblanc_no == gid).values(raw=raw))
+        s.commit()
+    return gid
+
+
+def _mock_client(handler) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+# ── PDF 요약 분석: 정상 저장(ok=True + sections) ──
+def test_enrich_pdf_summaries_stores_analysis(monkeypatch):
+    gid = _seed_pdf_candidate("lh", "PDF1", ["https://x/a.pdf"])
+    pdf_bytes = _make_pdf(["hello world"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=pdf_bytes)
+
+    with _mock_client(handler) as c:
+        got = pipeline.enrich_pdf_summaries(client=c)
+    assert got == 1
+
+    with SessionLocal() as s:
+        row = get_notice_analysis(s, gid)
+        assert row is not None
+        assert row.source == "lh"
+        assert len(row.files) == 1
+        f = row.files[0]
+        assert f["ok"] is True
+        assert f["error"] is None
+        assert f["url"] == "https://x/a.pdf"
+        assert f["page_count"] == 1
+        assert isinstance(f["sections"], list)
+    _cleanup()
+
+
+# ── PDF 요약 분석: 멱등 — URL 집합 동일하면 재분석하지 않는다 ──
+def test_enrich_pdf_summaries_idempotent_skip():
+    _seed_pdf_candidate("lh", "PDF2", ["https://x/a.pdf"])
+    pdf_bytes = _make_pdf(["hello"])
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, content=pdf_bytes)
+
+    with _mock_client(handler) as c:
+        assert pipeline.enrich_pdf_summaries(client=c) == 1
+        calls.clear()
+        assert pipeline.enrich_pdf_summaries(client=c) == 0
+    assert calls == []  # 재다운로드 없음
+    _cleanup()
+
+
+# ── PDF 요약 분석: 실패 항목이 있으면 URL 집합이 같아도 재분석한다 ──
+def test_enrich_pdf_summaries_reanalyzes_when_prior_failure_present():
+    _seed_pdf_candidate("lh", "PDF3", ["https://x/a.pdf"])
+
+    def fail_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    with _mock_client(fail_handler) as c:
+        assert pipeline.enrich_pdf_summaries(client=c) == 1  # ok=False 로 저장됨
+
+    pdf_bytes = _make_pdf(["ok now"])
+    calls = []
+
+    def ok_handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, content=pdf_bytes)
+
+    with _mock_client(ok_handler) as c:
+        got = pipeline.enrich_pdf_summaries(client=c)
+    assert got == 1  # 스킵되지 않고 재분석됨
+    assert calls == ["https://x/a.pdf"]
+    _cleanup()
+
+
+# ── PDF 요약 분석: 다운로드 오류(500) — ok=False 로 기록하고 함수는 정상 반환(에러) ──
+def test_enrich_pdf_summaries_download_error_recorded():
+    gid = _seed_pdf_candidate("lh", "PDF4", ["https://x/broken.pdf"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="internal error")
+
+    with _mock_client(handler) as c:
+        got = pipeline.enrich_pdf_summaries(client=c)
+    assert got == 1
+
+    with SessionLocal() as s:
+        row = get_notice_analysis(s, gid)
+        assert row.files[0]["ok"] is False
+        assert row.files[0]["error"]
+        assert row.files[0]["page_count"] == 0
+        assert row.files[0]["sections"] == []
+    _cleanup()
+
+
+# ── PDF 요약 분석: 경계 — 대상 공고 0건이면 0 반환 ──
+def test_enrich_pdf_summaries_no_candidates():
+    with SessionLocal() as s:
+        for t in (NotifyLog, MatchResult, NoticeHouseType, Notice):
+            s.execute(delete(t))
+        s.commit()
+    assert pipeline.enrich_pdf_summaries() == 0
+
+
+# ── PDF 요약 분석: 경계 — files 가 빈 리스트인 공고는 대상에서 스킵된다 ──
+def test_enrich_pdf_summaries_skips_notice_with_empty_files():
+    _seed_pdf_candidate("lh", "PDF5", [])
+    assert pipeline.enrich_pdf_summaries() == 0
+    with SessionLocal() as s:
+        assert get_notice_analysis(s, global_id("lh", "PDF5")) is None
+    _cleanup()
+
+
+# ── GH 상세 보강: raw._gh_detail.files 저장 ──
+def test_enrich_gh_detail_stores_files(monkeypatch):
+    from src.collectors.gh import GhNotice
+
+    init_db()
+    with SessionLocal() as s:
+        for t in (NotifyLog, MatchResult, NoticeHouseType, Notice):
+            s.execute(delete(t))
+        s.commit()
+        n = GhNotice.model_validate(
+            {"pbanc_no": "807", "biz_ty": "임대", "biz_ty_cd": "01", "name": "테스트공고"}
+        )
+        upsert_notices([n], source="gh", session=s)
+    gid = global_id("gh", "gh-807")
+
+    calls = []
+
+    def fake(pbanc_no, biz_ty_cd, **kw):
+        calls.append((pbanc_no, biz_ty_cd))
+        return [{"label": None, "name": "공고문.pdf", "url": "https://apply.gh.or.kr/x.pdf"}]
+
+    monkeypatch.setattr(pipeline, "fetch_gh_detail_files", fake)
+    assert pipeline.enrich_gh_detail() == 1
+
+    assert calls == [("807", "01")]
+    with SessionLocal() as s:
+        row = s.scalar(select(Notice).where(Notice.pblanc_no == gid))
+        assert row.raw["_gh_detail"]["files"][0]["url"] == "https://apply.gh.or.kr/x.pdf"
+    _cleanup()
+
+
+# ── GH 상세 보강: 이미 _gh_detail 있으면 재호출하지 않는다 ──
+def test_enrich_gh_detail_skips_when_already_present(monkeypatch):
+    from src.collectors.gh import GhNotice
+
+    init_db()
+    with SessionLocal() as s:
+        for t in (NotifyLog, MatchResult, NoticeHouseType, Notice):
+            s.execute(delete(t))
+        s.commit()
+        n = GhNotice.model_validate(
+            {"pbanc_no": "808", "biz_ty": "임대", "biz_ty_cd": "01", "name": "테스트공고"}
+        )
+        upsert_notices([n], source="gh", session=s)
+    gid = global_id("gh", "gh-808")
+    with SessionLocal() as s:
+        row = s.scalar(select(Notice).where(Notice.pblanc_no == gid))
+        raw = {**row.raw, "_gh_detail": {"files": []}}
+        s.execute(pipeline.update(Notice).where(Notice.pblanc_no == gid).values(raw=raw))
+        s.commit()
+
+    calls = []
+    monkeypatch.setattr(pipeline, "fetch_gh_detail_files", lambda *a, **kw: calls.append(a) or [])
+    assert pipeline.enrich_gh_detail() == 0
+    assert calls == []
+    _cleanup()
+
+
 # ── run_batch: 6개 수집원 배선 ──
 _SOURCE_FETCHERS = {
     "applyhome": "fetch_apt_notices",
@@ -305,6 +512,8 @@ def _stub_batch(monkeypatch, *, counts, failing=()):
     monkeypatch.setattr(pipeline, "enrich_lh_supply", lambda: 0)
     monkeypatch.setattr(pipeline, "enrich_lh_detail", lambda: 0)
     monkeypatch.setattr(pipeline, "enrich_polygons", lambda: 0)
+    monkeypatch.setattr(pipeline, "enrich_gh_detail", lambda: 0)
+    monkeypatch.setattr(pipeline, "enrich_pdf_summaries", lambda **kw: 0)
     monkeypatch.setattr(pipeline, "notify_new_matches", lambda: 0)
     return upserted
 
@@ -352,7 +561,7 @@ def test_existing_result_keys_preserved(monkeypatch):
 
     assert set(out) >= {
         "collected", "house_types", "lh_notices", "lh_enriched", "lh_detailed",
-        "polygons", "evaluated", "matched", "sent",
+        "polygons", "gh_detailed", "pdf_summaries", "evaluated", "matched", "sent",
     }
     assert out["collected"] == 0 and out["gh_notices"] == 0
     assert out["sent"] == 0
