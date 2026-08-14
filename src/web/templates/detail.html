@@ -173,6 +173,24 @@
   </section>
   {% endif %}
 
+  {% if analysis %}
+  <section class="section">
+    <h2><svg class="ic"><use href="#i-doc"></use></svg> 공고문 자동 요약</h2>
+    {% for f in analysis.files %}
+    {% if analysis.files|length > 1 %}<h3>{{ f.name }}</h3>{% endif %}
+    {% for s in f.sections %}
+    <h4>{{ s.title }}</h4>
+    <ul>
+      {% for line in s.lines %}
+      <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+    {% endfor %}
+    {% endfor %}
+    <p class="note">PDF 공고문에서 자동 추출한 요약입니다. 정확한 내용은 반드시 원문 공고문을 확인하세요. (업데이트: {{ analysis.updated_at }})</p>
+  </section>
+  {% endif %}
+
   <section class="section">
     <h2><svg class="ic"><use href="#i-doc"></use></svg> 자격요건 · 상세</h2>
     <p class="note">무주택 요건·소득기준 등 상세 자격요건은 원본 공고문에서 확인하세요. 평면도(도면)는 공고문 PDF에 포함되어 있어요.</p>

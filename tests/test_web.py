@@ -13,6 +13,7 @@ from src.db import (
     init_db,
     save_match_results,
     upsert_house_types,
+    upsert_notice_analysis,
     upsert_notices,
 )
 from src.models import ApplyhomeHouseType, ApplyhomeNotice
@@ -200,3 +201,88 @@ def test_detail_no_map_without_key(seeded, monkeypatch):
     monkeypatch.setattr(webapp.settings, "kakao_js_key", "")
     r = login_client().get("/notice/applyhome:W1")
     assert 'id="map"' not in r.text
+
+
+# ── 상세: 공고문 자동 요약 섹션 (PDF 분석 정상) ──
+def test_detail_analysis_renders(seeded):
+    upsert_notice_analysis(
+        "applyhome:W1",
+        "gh",
+        [
+            {
+                "name": "공고문.pdf",
+                "url": "https://example.com/a.pdf",
+                "ok": True,
+                "error": None,
+                "page_count": 3,
+                "text_chars": 500,
+                "sections": [
+                    {"key": "rank1", "title": "1순위 조건", "lines": ["무주택세대구성원", "해당지역 거주"]}
+                ],
+            }
+        ],
+        session=seeded,
+    )
+    seeded.commit()
+    r = login_client().get("/notice/applyhome:W1")
+    assert r.status_code == 200
+    assert "공고문 자동 요약" in r.text
+    assert "1순위 조건" in r.text
+    assert "무주택세대구성원" in r.text
+    assert "정확한 내용은 반드시 원문 공고문을 확인" in r.text
+
+
+# ── 상세: 분석 없음/실패-only 인 경우 요약 섹션 미표시 (경계값) ──
+def test_detail_analysis_absent_or_failed_only_not_shown(seeded):
+    client = login_client()
+    r = client.get("/notice/applyhome:W1")
+    assert r.status_code == 200
+    assert "공고문 자동 요약" not in r.text  # 분석 행 없음
+
+    upsert_notice_analysis(
+        "applyhome:W1",
+        "gh",
+        [
+            {
+                "name": "공고문.pdf",
+                "url": "https://example.com/a.pdf",
+                "ok": False,
+                "error": "다운로드 실패",
+                "page_count": 0,
+                "text_chars": 0,
+                "sections": [],
+            }
+        ],
+        session=seeded,
+    )
+    seeded.commit()
+    r2 = client.get("/notice/applyhome:W1")
+    assert r2.status_code == 200
+    assert "공고문 자동 요약" not in r2.text  # 실패-only 파일뿐 → 미표시
+
+
+# ── 상세: 요약 lines 는 Jinja 자동 이스케이프로 무해화 (외부 PDF 텍스트는 신뢰 불가) ──
+def test_detail_analysis_escapes_html(seeded):
+    upsert_notice_analysis(
+        "applyhome:W1",
+        "gh",
+        [
+            {
+                "name": "공고문.pdf",
+                "url": "https://example.com/a.pdf",
+                "ok": True,
+                "error": None,
+                "page_count": 1,
+                "text_chars": 10,
+                "sections": [
+                    {"key": "notes", "title": "유의사항", "lines": ["<script>alert(1)</script>"]}
+                ],
+            }
+        ],
+        session=seeded,
+    )
+    seeded.commit()
+    r = login_client().get("/notice/applyhome:W1")
+    assert r.status_code == 200
+    assert "<script>alert" not in r.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in r.text
