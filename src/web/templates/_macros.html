@@ -100,17 +100,21 @@
      data-lng="{{ it.lng if it.lng is not none else '' }}"
      data-adres="{{ it.adres or '' }}"
      data-agency="{{ n.agency or '기타' }}"
-     data-title="{{ n.house_nm }}">
-  <div class="head-row">
-    <span class="badge badge--agency">{{ n.agency or '기타' }}</span>
-    <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
+     data-title="{{ n.house_nm }}"
+     {# t2-marker가 마커 밴드색·라벨 판정에 소비하는 계약 — 속성명 변경 금지 #}
+     data-dday="{{ it.dday if it.dday is not none else '' }}"
+     data-housing="{{ it.housing_type or n.house_secd_nm or '' }}">
+  <div class="card__top">
+    {# 유형 dot — 마커 밴드색과 변수 공유(기본 --accent-teal). 예정(dday<0)·미상(dday 없음)은 뮤트 #}
+    <span class="type-tag{% if it.dday is none or it.dday < 0 %} type-tag--muted{% endif %}"><i></i>{{ it.housing_type or n.house_secd_nm or '기타' }}</span>
     <div class="head-actions">
-      {% if it.dday is not none %}
-        {% if it.dday < 0 %}<span class="badge badge--pre">D+{{ -it.dday }} 예정</span>
-        {% elif it.dday <= 3 %}<span class="badge badge--soon">D-{{ it.dday }} 임박</span>
-        {% elif it.dday <= 7 %}<span class="badge badge--mid">D-{{ it.dday }}</span>
-        {% else %}<span class="badge badge--far">D-{{ it.dday }}</span>{% endif %}
-      {% endif %}
+      <span class="badge badge--agency">{{ n.agency or '기타' }}</span>
+      {# 해당지역 표식은 순위 배지 안에 붙인다 — "해당지역 1순위"가 최상위 신호(D19) #}
+      {# 유형(민영/국민)을 순위와 함께 읽히게 한다 — 국민은 순차제라 가점을 내세우지 않는다.
+         판정 사유는 title 로만 붙여 카드 본문을 밀어내지 않는다(둘 다 Jinja 자동이스케이프). #}
+      {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}"{% if it.rank_reasons %} title="{{ it.rank_reasons|join(' · ') }}"{% endif %}>{% if it.housing_type %}{{ it.housing_type }} · {% endif %}{% if it.in_area %}해당지역 {% endif %}{{ it.my_rank }}</span>
+      {% elif it.in_area %}<span class="tag">해당지역</span>{% endif %}
+      {% for label in it.preferred_hits %}<span class="tag">{{ label }} 선호</span>{% endfor %}
       {# 스프라이트 use는 symbol의 fill=none 때문에 CSS로 내부를 못 칠하므로, 채움 토글이 필요한
          이 버튼만 인라인 SVG로 둔다(.bookmark-btn.is-on .ic{fill}가 적용됨). #}
       <button type="button" class="bookmark-btn{{ ' is-on' if it.bookmarked else '' }}"
@@ -121,20 +125,19 @@
       </button>
     </div>
   </div>
+  {% if it.dday is not none %}
+    {% if it.dday < 0 %}<p class="figure figure--pre">D+{{ -it.dday }} 예정</p>
+    {% elif it.dday <= 3 %}<p class="figure figure--closing">마감 D-{{ it.dday }}</p>
+    {% elif it.dday <= 7 %}<p class="figure figure--warn">마감 D-{{ it.dday }}</p>
+    {% else %}<p class="figure">마감 D-{{ it.dday }}</p>{% endif %}
+  {% endif %}
+  <a class="title" href="/notice/{{ n.pblanc_no }}">{{ n.house_nm }}</a>
   <div class="row">
     <span class="tag">{{ n.area_nm or '-' }}</span>
-    {# 해당지역 표식은 순위 배지 안에 붙인다 — "해당지역 1순위"가 최상위 신호(D19) #}
-    {# 유형(민영/국민)을 순위와 함께 읽히게 한다 — 국민은 순차제라 가점을 내세우지 않는다.
-       판정 사유는 title 로만 붙여 카드 본문을 밀어내지 않는다(둘 다 Jinja 자동이스케이프). #}
-    {% if it.my_rank %}<span class="rank {{ 'rank-1' if it.my_rank == '1순위' else 'rank-2' }}"{% if it.rank_reasons %} title="{{ it.rank_reasons|join(' · ') }}"{% endif %}>{% if it.housing_type %}{{ it.housing_type }} · {% endif %}{% if it.in_area %}해당지역 {% endif %}{{ it.my_rank }}</span>
-    {% elif it.in_area %}<span class="tag">해당지역</span>{% endif %}
     <span>{{ n.house_secd_nm or '' }} {{ n.house_dtl_secd_nm or '' }}</span>
-    {% for label in it.preferred_hits %}<span class="tag">{{ label }} 선호</span>{% endfor %}
-  </div>
-  {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
-  <div class="row">
     <span><svg class="ic"><use href="#i-calendar"></use></svg> 접수 <b>{{ n.rcept_bgnde }} ~ {{ n.rcept_endde }}</b></span>
   </div>
+  {% if it.adres %}<div class="row"><span><svg class="ic"><use href="#i-pin"></use></svg> {{ it.adres }}</span></div>{% endif %}
   <div class="row">
     {% if it.price_lo %}<span><svg class="ic"><use href="#i-won"></use></svg> <b>{% if it.price_lo == it.price_hi %}{{ '{:,}'.format(it.price_lo) }}{% else %}{{ '{:,}'.format(it.price_lo) }}~{{ '{:,}'.format(it.price_hi) }}{% endif %}만원</b></span>{% endif %}
     {% if it.area_lo %}<span><svg class="ic"><use href="#i-ruler"></use></svg> {{ '%.0f'|format(it.area_lo) }}{% if it.area_hi != it.area_lo %}~{{ '%.0f'|format(it.area_hi) }}{% endif %}㎡</span>{% endif %}

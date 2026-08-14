@@ -32,6 +32,17 @@
   .badge--agency{display:inline-block;padding:1px 7px;border-radius:10px;
     font-size:11px;font-weight:600;background:#eef4ff;color:#2b5fd9;margin-right:6px}
   /* .head-row/.head-actions/a.title/.row 카드 스타일은 base.html에 공용 정의됨 */
+  /* 지도 마커(.mk): 2단 pill 오버레이 — design-spec §1, 기존 토큰만 사용 */
+  .mk{--band:var(--accent-teal);display:inline-flex;flex-direction:column;cursor:pointer;
+      border-radius:6px 6px 6px 0;border:1px solid color-mix(in srgb,var(--band) 80%,#000);
+      box-shadow:1px 2px 4px rgba(0,0,0,.16);background:var(--band);overflow:hidden;
+      font-family:var(--font-sans);line-height:1;transform-origin:bottom left}
+  .mk__type{color:#fff;font-size:11px;font-weight:700;padding:4px 8px 3px;letter-spacing:-.01em}
+  .mk__figure{background:#fff;color:var(--ink);font-size:12.5px;font-weight:700;
+      padding:4px 8px;border-radius:0 0 5px 0;white-space:nowrap}
+  .mk--selected{transform:scale(1.08);border-color:var(--ink);z-index:10}
+  .mk--closing .mk__figure{color:var(--danger)}   /* 마감 D-3 이내 */
+  .mk--closed{--band:var(--muted-soft)}            /* 접수 마감 */
 </style>
 {% endblock %}
 
@@ -265,7 +276,7 @@
         });
         var geocoder = new kakao.maps.services.Geocoder();
         var cards = Array.prototype.slice.call(document.querySelectorAll(".list-panel .card"));
-        var markers = {};                 // pblanc → Marker (한 번만 생성, 캐시)
+        var markers = {};                 // pblanc → { overlay, el } (한 번만 생성, 캐시)
         var activeMarker = null;
 
         // 지오코딩 사다리(detail.html과 동일): 전체 → 앞4→3→2단어
@@ -286,11 +297,46 @@
           setTimeout(function () { card.classList.remove("card--active"); }, 2000);
         }
 
-        function emphasize(marker) {
-          if (activeMarker) activeMarker.setZIndex(0);
-          marker.setZIndex(10);
-          activeMarker = marker;
-          map.panTo(marker.getPosition());
+        function emphasize(entry) {
+          if (activeMarker) {
+            activeMarker.overlay.setZIndex(0);
+            activeMarker.el.classList.remove("mk--selected");
+          }
+          entry.overlay.setZIndex(10);
+          entry.el.classList.add("mk--selected");
+          activeMarker = entry;
+          map.panTo(entry.overlay.getPosition());
+        }
+
+        // 카드 data-dday/data-housing으로 2단 pill 마커 DOM을 만든다.
+        // 문자열 이어붙이기 없이 createElement/textContent로만(신뢰 못하는 API 필드 XSS 방지).
+        function createMarkerEl(card) {
+          var wrap = document.createElement("div");
+          wrap.className = "mk";
+          var housing = card.dataset.housing || "";
+          if (housing) {
+            var type = document.createElement("span");
+            type.className = "mk__type";
+            type.textContent = housing;
+            wrap.appendChild(type);
+          }
+          var figure = document.createElement("span");
+          figure.className = "mk__figure";
+          var d = parseInt(card.dataset.dday, 10);
+          if (isNaN(d)) {
+            figure.textContent = "일정 미정";
+            wrap.classList.add("mk--closed");
+          } else if (d < 0) {
+            figure.textContent = "D+" + (-d) + " 예정";
+            wrap.classList.add("mk--closed");
+          } else if (d <= 3) {
+            figure.textContent = "마감 D-" + d;
+            wrap.classList.add("mk--closing");
+          } else {
+            figure.textContent = "마감 D-" + d;
+          }
+          wrap.appendChild(figure);
+          return wrap;
         }
 
         function addMarker(card, lat, lng) {
@@ -298,21 +344,21 @@
           var pos = new kakao.maps.LatLng(lat, lng);
           // 칩 필터에 맞는 마커만 지도에 올린다(뷰포트는 마커를 숨기지 않고 화면 밖으로 둘 뿐).
           var onMap = window.chungyakChipMatch(card) ? map : null;
-          var m = new kakao.maps.Marker({ map: onMap, position: pos });
-          markers[card.dataset.pblanc] = m;
-          // 인포윈도우 내용은 문자열 이어붙이기 없이 textContent로(신뢰 못하는 API 필드 XSS 방지)
-          var box = document.createElement("div");
-          box.style.cssText = "padding:6px 10px;font-size:12.5px;font-weight:700;white-space:nowrap";
-          box.textContent = card.dataset.title || "";
-          var iw = new kakao.maps.InfoWindow({ content: box });
-          kakao.maps.event.addListener(m, "click", function () {
-            emphasize(m); iw.open(map, m); focusCard(card);
+          var el = createMarkerEl(card);
+          var overlay = new kakao.maps.CustomOverlay({
+            position: pos, content: el, xAnchor: 0, yAnchor: 1, map: onMap
+          });
+          var entry = { overlay: overlay, el: el };
+          markers[card.dataset.pblanc] = entry;
+          // CustomOverlay는 kakao 클릭 이벤트를 지원하지 않으므로 content DOM에서 직접 받는다.
+          el.addEventListener("click", function () {
+            emphasize(entry); focusCard(card);
           });
         }
 
         function focusFromCard(card) {
-          var m = markers[card.dataset.pblanc];
-          if (m) emphasize(m);
+          var entry = markers[card.dataset.pblanc];
+          if (entry) emphasize(entry);
         }
 
         function geocodeCard(card) {
@@ -337,11 +383,11 @@
           var b = map.getBounds();
           window.chungyakRenderList(function (card) {
             var chip = window.chungyakChipMatch(card);
-            var m = markers[card.dataset.pblanc];
-            if (m) m.setMap(chip ? map : null);   // 칩 제외 마커는 지도에서 숨김
+            var entry = markers[card.dataset.pblanc];
+            if (entry) entry.overlay.setMap(chip ? map : null);  // 칩 제외 마커는 지도에서 숨김
             if (!chip) return false;              // 칩 불일치 → 목록 제외
-            if (!m) return false;                 // 좌표 없음(마커 없음) → 범위 밖으로 간주
-            return b.contain(m.getPosition());    // 현재 지도 범위 안에 있나
+            if (!entry) return false;             // 좌표 없음(마커 없음) → 범위 밖으로 간주
+            return b.contain(entry.overlay.getPosition());  // 현재 지도 범위 안에 있나
           });
         };
 

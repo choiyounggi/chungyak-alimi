@@ -110,9 +110,15 @@ def test_index_renders_normal_list():
     assert 'data-secd="APT"' in out
     assert 'data-specials="신혼부부|생애최초"' in out
     assert 'data-rank="1순위"' in out
-    # D-day 뱃지 클래스(base 계약) + 임계값(5 → mid)·문구 보존
-    assert 'class="badge badge--mid"' in out
-    assert "D-5" in out
+    # 핵심 수치(figure) 위계 + 임계값(5 → warn)·문구 보존
+    assert 'class="figure figure--warn"' in out
+    assert "마감 D-5" in out
+    # 유형 dot+라벨(card__top) — 뮤트 아님(dday>=0)
+    assert 'class="card__top"' in out
+    assert '<span class="type-tag">' in out
+    # t2-marker 소비 계약: data-dday/data-housing
+    assert 'data-dday="5"' in out
+    assert 'data-housing="APT"' in out
     # 지역=.tag, 순위=.rank(base 계약)
     assert 'class="tag"' in out
     assert "rank-1" in out
@@ -139,19 +145,57 @@ def test_index_renders_empty_list():
 
 # ── 경계값: dday 임계 경계(예정/임박/원거리)·price_lo 없음 ──
 def test_index_dday_thresholds_and_missing_price():
-    # dday<0 → 예정(badge--pre)
+    # dday<0 → 예정(figure--pre), 기존 D+표기 의미 유지(D1)
     pre = _render([_item(dday=-3, price_lo=None, price_hi=None)])
-    assert 'class="badge badge--pre"' in pre
+    assert 'class="figure figure--pre"' in pre
     assert "D+3 예정" in pre
+    assert 'data-dday="-3"' in pre
+    # dday<0 → 유형 dot 뮤트(D3)
+    assert '<span class="type-tag type-tag--muted">' in pre
     # 가격 없음 → 가격 세그먼트(#i-won) 미노출, 렌더 정상
     assert 'href="#i-won"' not in pre
-    # dday<=3 → 임박(badge--soon)
-    soon = _render([_item(dday=2)])
-    assert 'class="badge badge--soon"' in soon
-    assert "D-2 임박" in soon
-    # dday>7 → 원거리(badge--far)
-    far = _render([_item(dday=30)])
-    assert 'class="badge badge--far"' in far
+    # 경계: dday=0 → 마감 임박 하한(closing, --danger)
+    d0 = _render([_item(dday=0)])
+    assert 'class="figure figure--closing"' in d0
+    assert "마감 D-0" in d0
+    # 경계: dday=3 → closing 상한
+    d3 = _render([_item(dday=3)])
+    assert 'class="figure figure--closing"' in d3
+    assert "마감 D-3" in d3
+    # 경계: dday=4 → warn 하한
+    d4 = _render([_item(dday=4)])
+    assert 'class="figure figure--warn"' in d4
+    assert "마감 D-4" in d4
+    # 경계: dday=7 → warn 상한
+    d7 = _render([_item(dday=7)])
+    assert 'class="figure figure--warn"' in d7
+    assert "마감 D-7" in d7
+    # 경계: dday=8 → 기본(원거리, 수식자 없음)
+    d8 = _render([_item(dday=8)])
+    assert 'class="figure"' in d8
+    assert 'class="figure figure--' not in d8
+    assert "마감 D-8" in d8
+    # 정상: dday=12 → 기본, data-dday 보존
+    far = _render([_item(dday=12)])
+    assert "마감 D-12" in far
+    assert 'data-dday="12"' in far
+
+
+# ── 에러/빈값: dday None → figure 미출력 + data-dday 빈값(D10) ──
+def test_index_dday_none_omits_figure():
+    out = _render([_item(dday=None)])
+    assert '<p class="figure' not in out
+    assert 'data-dday=""' in out
+    # dday None도 뮤트(D3)
+    assert '<span class="type-tag type-tag--muted">' in out
+
+
+# ── 에러/빈값: housing_type·house_secd_nm 모두 없음 → data-housing 빈값('기타' 넣지 않음, D4) ──
+def test_index_data_housing_empty_when_both_missing():
+    out = _render([_item(notice=_notice(house_secd_nm=None))])
+    assert 'data-housing=""' in out
+    # 라벨 표기는 '기타'로 폴백하되 data-housing 속성값은 비운다
+    assert "기타" in out
 
 
 # ── error-assert(DoD): 파일 내 이모지 0개 + 첫 줄 extends + 블록 계약 ──
@@ -278,6 +322,74 @@ def test_map_js_present_with_kakao_key():
     assert "textContent" in out
 
 
+# ── 지도 마커: CustomOverlay 2단 pill(.mk)로 교체, 옛 Marker/InfoWindow 제거 ──
+def test_marker_customoverlay_replaces_marker_infowindow():
+    out = _render([_item(lat=37.61, lng=126.71)], kakao_key="TESTKEY")
+    assert "CustomOverlay" in out
+    assert "createMarkerEl" in out
+    assert "xAnchor" in out and "yAnchor" in out
+    # 옛 API 흔적 제거(InfoWindow는 마커 자체가 라벨을 대신함)
+    assert "new kakao.maps.Marker(" not in out
+    assert "InfoWindow" not in out
+
+
+# ── 마커 CSS(.mk): 스펙 §1 코드 블록과 일치(토큰만 사용) ──
+def test_marker_css_matches_spec():
+    out = _render([_item()], kakao_key="TESTKEY")
+    assert ".mk{" in out
+    assert "border-radius:6px 6px 6px 0" in out
+    assert "box-shadow:1px 2px 4px rgba(0,0,0,.16)" in out
+    assert "cursor:pointer" in out
+    assert ".mk__type{" in out
+    assert ".mk__figure{" in out
+    assert "border-radius:0 0 5px 0" in out
+    assert ".mk--selected{" in out and "scale(1.08)" in out
+    assert ".mk--closing .mk__figure{color:var(--danger)}" in out
+    assert ".mk--closed{--band:var(--muted-soft)}" in out
+
+
+# ── 마커 dday 분기(정상/경계/에러): 스펙 4분기가 JS 소스에 그대로 존재 ──
+def test_marker_dday_branch_logic_present():
+    out = _render([_item()], kakao_key="TESTKEY")
+    # 에러(파싱 불가 → 미정)
+    assert '"일정 미정"' in out
+    # 경계(음수 → 예정, 접수 마감 취급)
+    assert '"D+" + (-d) + " 예정"' in out
+    # 경계(0~3 → 임박)
+    assert "d <= 3" in out
+    assert "mk--closing" in out
+    # 정상(그 외 → 마감 D-N, 임박 클래스 없음)
+    assert '"마감 D-" + d' in out
+    assert "mk--closed" in out
+
+
+# ── 마커 강조: 카드 hover/focus·클릭 시 .mk--selected 토글(emphasize 연동) ──
+# emphasize() 함수 본문만 떼어내 이전 마커에서 remove + 새 마커에 add가 모두
+# 있는지 확인한다(둘 중 하나만 있으면 선택 상태가 누적되거나 아예 안 붙는다).
+def test_marker_selected_class_toggle_wired():
+    out = _render([_item(lat=37.61, lng=126.71)], kakao_key="TESTKEY")
+    m = re.search(r"( *)function emphasize\(entry\) \{(.*?)\n\1\}\n", out, re.S)
+    assert m, "emphasize(entry) 함수를 찾을 수 없음"
+    body = m.group(2)
+    assert 'activeMarker.el.classList.remove("mk--selected")' in body
+    assert 'entry.el.classList.add("mk--selected")' in body
+
+
+# ── 경계: data-housing 빈값이면 상단 밴드(mk__type) 노드 자체를 생략 ──
+# createMarkerEl() 함수 본문만 떼어내 mk__type 생성이 housing 존재를 확인하는
+# if 블록 안에서만 일어나는지 확인한다(조건 없이 항상 append하면 이 매치가 깨진다).
+def test_marker_type_band_omitted_when_housing_empty():
+    out = _render([_item()], kakao_key="TESTKEY")
+    m = re.search(r"( *)function createMarkerEl\(card\) \{(.*?)\n\1\}\n", out, re.S)
+    assert m, "createMarkerEl(card) 함수를 찾을 수 없음"
+    body = m.group(2)
+    gate = re.search(
+        r"if \(housing\) \{[^}]*mk__type[^}]*wrap\.appendChild\(type\);\s*\}",
+        body,
+    )
+    assert gate, "mk__type 노드 생성이 housing 존재 조건 블록 밖에 있음"
+
+
 # ── 지도 뷰포트가 곧 목록 필터: 초기 강남역 + 범위∩칩 필터 ──
 def test_map_viewport_drives_list():
     out = _render([_item(lat=37.5, lng=127.03)], kakao_key="TESTKEY")
@@ -305,6 +417,8 @@ def test_map_js_absent_without_kakao_key():
     out = _render([_item()], kakao_key="")
     assert "dapi.kakao.com" not in out
     assert "mapDashFailed" not in out
+    assert "CustomOverlay" not in out
+    assert "createMarkerEl" not in out
     # 기존 칩 필터 JS는 그대로
     assert "button.chip" in out
     assert 'getElementById("js-empty")' in out
