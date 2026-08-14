@@ -57,6 +57,15 @@ def test_bookmarks_renders_list():
     assert "공공 오픈API(청약홈/LH) 기반" in out  # 푸터
 
 
+# ── 정상: 공유 매크로 v2 위계(figure) + t2 소비 계약(data-dday/data-housing) 렌더 스모크(D10) ──
+def test_bookmarks_card_has_figure_and_dday_housing_dataset():
+    out = _render([_item()])  # dday=3 → closing
+    assert 'class="figure figure--closing"' in out
+    assert "마감 D-3" in out
+    assert 'data-dday="3"' in out
+    assert 'data-housing="APT"' in out
+
+
 # ── 경계값: 빈 목록 → 빈 상태 안내 + 카드 0개, 예외 없음 ──
 def test_bookmarks_empty():
     out = _render([])

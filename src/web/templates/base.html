@@ -53,7 +53,17 @@
   /* 카드 내부 공용 레이아웃(대시보드·북마크 페이지 공유) */
   .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
   .head-actions{display:flex;align-items:center;gap:8px;flex:none}
-  a.title{color:var(--ink);text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.02em;line-height:1.4;flex:1 1 auto;min-width:0}
+  /* 카드 위계 v2(수치 우선) — 상단 행: 좌 유형 dot+라벨, 우 순위·선호·기관·북마크 */
+  .card__top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
+  .type-tag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--body)}
+  .type-tag i{width:8px;height:8px;border-radius:50%;background:var(--accent-teal);display:inline-block}
+  .type-tag--muted i{background:var(--muted-soft)}
+  /* 핵심 수치(D-day) — 타이틀급, 마감 임박도(closing→danger, warn→warn), 예정(pre)은 뮤트 */
+  .figure{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-.02em;margin:8px 0 4px}
+  .figure--pre{color:var(--muted-soft)}
+  .figure--closing{color:var(--danger)}
+  .figure--warn{color:var(--warn)}
+  a.title{color:var(--ink);text-decoration:none;font-size:15px;font-weight:600;letter-spacing:-.01em;line-height:1.4;display:block;margin-bottom:6px}
   a.title:hover{color:var(--accent-teal)}
   .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--body)}
   .row b{color:var(--body-strong);font-weight:700}
