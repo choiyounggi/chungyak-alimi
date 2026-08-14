@@ -193,3 +193,19 @@ def test_summarize_text_removes_blank_lines_from_section_body():
 def test_section_anchors_and_titles_share_the_same_three_keys():
     assert set(SECTION_ANCHORS.keys()) == {"rank1", "caution", "price"}
     assert set(SECTION_TITLES.keys()) == {"rank1", "caution", "price"}
+
+
+# ── NUL(\x00) 제거: 실제 LH PDF에서 NUL이 추출되어 Postgres JSONB 저장이 깨졌다(2026-08-14 실측) ──
+def test_extract_text_strips_nul_characters():
+    data = _make_pdf(["AB\x00CD", "line\x00two"])
+    text, page_count = extract_text(data)
+    assert page_count == 1
+    assert "\x00" not in text
+    assert "ABCD" in text  # NUL 만 제거되고 양옆 문자는 보존된다
+
+
+def test_analyze_pdf_bytes_output_never_contains_nul():
+    data = _make_pdf(["1st rank\x00section"])
+    result = analyze_pdf_bytes(data)
+    assert "\x00" not in str(result.model_dump())
+    assert result.text_chars > 0

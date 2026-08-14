@@ -603,3 +603,53 @@ def test_safe_logs_collector_failure_without_secret(monkeypatch, caplog):
         assert pipeline._safe(boom, "HUG", []) == []
     assert any("CANARY123" not in fmt.format(r) for r in caplog.records)
     assert all("CANARY123" not in fmt.format(r) for r in caplog.records)
+
+
+# ── 트랜잭션 격리: 한 공고의 upsert 실패(예: NUL JSONB 거부)가 트랜잭션을 오염시켜
+#    이후 공고까지 연쇄 실패하던 프로덕션 버그의 회귀 테스트(2026-08-14 실측) ──
+def test_enrich_pdf_summaries_one_failed_upsert_does_not_poison_the_rest(monkeypatch):
+    gid_a = _seed_pdf_candidate("lh", "PDFA", ["https://x/a.pdf"])
+    # 두 번째 후보는 테이블을 지우지 않고 직접 추가한다(_seed 헬퍼는 전체 삭제를 포함).
+    from src.collectors.lh import LhNotice
+
+    nb = LhNotice.model_validate({
+        "PAN_ID": "PDFB", "PAN_NM": "테스트공고B", "CNP_CD_NM": "경기도",
+        "CLSG_DT": "2026.08.01", "CCR_CNNT_SYS_DS_CD": "03",
+        "SPL_INF_TP_CD": "050", "UPP_AIS_TP_CD": "05", "AIS_TP_CD": "05",
+    })
+    gid_b = global_id("lh", "PDFB")
+    with SessionLocal() as s:
+        upsert_notices([nb], source="lh", session=s)
+        row = s.scalar(select(Notice).where(Notice.pblanc_no == gid_b))
+        raw = {**(row.raw or {}), "_lh_detail": {"files": [
+            {"label": None, "name": "b.pdf", "url": "https://x/b.pdf"}
+        ]}}
+        s.execute(pipeline.update(Notice).where(Notice.pblanc_no == gid_b).values(raw=raw))
+        s.commit()
+
+    # gid_a 파일에는 NUL 이 든 섹션을 강제로 만들어 실제 JSONB 거부를 재현하고,
+    # gid_b 는 정상 분석 결과를 준다 — 분석 단계가 아닌 저장 단계 실패를 테스트한다.
+    def fake_analyze(file: dict, _client) -> dict:
+        bad = "https://x/a.pdf" == file["url"]
+        return {
+            "name": file["name"], "url": file["url"], "ok": True, "error": None,
+            "page_count": 1, "text_chars": 10,
+            "sections": [{"key": "rank1", "title": "1순위 조건",
+                          "lines": ["나쁨\x00값" if bad else "정상값"]}],
+        }
+
+    monkeypatch.setattr(pipeline, "_analyze_pdf_file", fake_analyze)
+
+    def handler(request: httpx.Request) -> httpx.Response:  # 다운로드는 도달하지 않는다
+        return httpx.Response(200, content=b"")
+
+    with _mock_client(handler) as c:
+        got = pipeline.enrich_pdf_summaries(client=c)
+
+    # NUL 이 든 gid_a 는 실패, gid_b 는 오염 없이 저장돼야 한다.
+    assert got == 1
+    with SessionLocal() as s:
+        assert get_notice_analysis(s, gid_a) is None
+        row_b = get_notice_analysis(s, gid_b)
+        assert row_b is not None
+        assert row_b.files[0]["sections"][0]["lines"] == ["정상값"]

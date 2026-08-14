@@ -61,6 +61,9 @@ def extract_text(data: bytes) -> tuple[str, int]:
             raise PdfExtractError("암호화된 PDF는 분석할 수 없습니다")
         page_count = len(reader.pages)
         raw = "\n".join(page.extract_text() or "" for page in reader.pages)
+        # 실제 LH 공고 PDF에서 NUL(\x00)이 추출된다 — Postgres JSONB가
+        # NUL 을 거부(UntranslatableCharacter)하므로 여기서 제거한다(2026-08-14 실측).
+        raw = raw.replace("\x00", "")
     except PdfExtractError:
         raise
     except Exception as e:
