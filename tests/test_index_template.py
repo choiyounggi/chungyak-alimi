@@ -278,6 +278,74 @@ def test_map_js_present_with_kakao_key():
     assert "textContent" in out
 
 
+# ── 지도 마커: CustomOverlay 2단 pill(.mk)로 교체, 옛 Marker/InfoWindow 제거 ──
+def test_marker_customoverlay_replaces_marker_infowindow():
+    out = _render([_item(lat=37.61, lng=126.71)], kakao_key="TESTKEY")
+    assert "CustomOverlay" in out
+    assert "createMarkerEl" in out
+    assert "xAnchor" in out and "yAnchor" in out
+    # 옛 API 흔적 제거(InfoWindow는 마커 자체가 라벨을 대신함)
+    assert "new kakao.maps.Marker(" not in out
+    assert "InfoWindow" not in out
+
+
+# ── 마커 CSS(.mk): 스펙 §1 코드 블록과 일치(토큰만 사용) ──
+def test_marker_css_matches_spec():
+    out = _render([_item()], kakao_key="TESTKEY")
+    assert ".mk{" in out
+    assert "border-radius:6px 6px 6px 0" in out
+    assert "box-shadow:1px 2px 4px rgba(0,0,0,.16)" in out
+    assert "cursor:pointer" in out
+    assert ".mk__type{" in out
+    assert ".mk__figure{" in out
+    assert "border-radius:0 0 5px 0" in out
+    assert ".mk--selected{" in out and "scale(1.08)" in out
+    assert ".mk--closing .mk__figure{color:var(--danger)}" in out
+    assert ".mk--closed{--band:var(--muted-soft)}" in out
+
+
+# ── 마커 dday 분기(정상/경계/에러): 스펙 4분기가 JS 소스에 그대로 존재 ──
+def test_marker_dday_branch_logic_present():
+    out = _render([_item()], kakao_key="TESTKEY")
+    # 에러(파싱 불가 → 미정)
+    assert '"일정 미정"' in out
+    # 경계(음수 → 예정, 접수 마감 취급)
+    assert '"D+" + (-d) + " 예정"' in out
+    # 경계(0~3 → 임박)
+    assert "d <= 3" in out
+    assert "mk--closing" in out
+    # 정상(그 외 → 마감 D-N, 임박 클래스 없음)
+    assert '"마감 D-" + d' in out
+    assert "mk--closed" in out
+
+
+# ── 마커 강조: 카드 hover/focus·클릭 시 .mk--selected 토글(emphasize 연동) ──
+# emphasize() 함수 본문만 떼어내 이전 마커에서 remove + 새 마커에 add가 모두
+# 있는지 확인한다(둘 중 하나만 있으면 선택 상태가 누적되거나 아예 안 붙는다).
+def test_marker_selected_class_toggle_wired():
+    out = _render([_item(lat=37.61, lng=126.71)], kakao_key="TESTKEY")
+    m = re.search(r"( *)function emphasize\(entry\) \{(.*?)\n\1\}\n", out, re.S)
+    assert m, "emphasize(entry) 함수를 찾을 수 없음"
+    body = m.group(2)
+    assert 'activeMarker.el.classList.remove("mk--selected")' in body
+    assert 'entry.el.classList.add("mk--selected")' in body
+
+
+# ── 경계: data-housing 빈값이면 상단 밴드(mk__type) 노드 자체를 생략 ──
+# createMarkerEl() 함수 본문만 떼어내 mk__type 생성이 housing 존재를 확인하는
+# if 블록 안에서만 일어나는지 확인한다(조건 없이 항상 append하면 이 매치가 깨진다).
+def test_marker_type_band_omitted_when_housing_empty():
+    out = _render([_item()], kakao_key="TESTKEY")
+    m = re.search(r"( *)function createMarkerEl\(card\) \{(.*?)\n\1\}\n", out, re.S)
+    assert m, "createMarkerEl(card) 함수를 찾을 수 없음"
+    body = m.group(2)
+    gate = re.search(
+        r"if \(housing\) \{[^}]*mk__type[^}]*wrap\.appendChild\(type\);\s*\}",
+        body,
+    )
+    assert gate, "mk__type 노드 생성이 housing 존재 조건 블록 밖에 있음"
+
+
 # ── 지도 뷰포트가 곧 목록 필터: 초기 강남역 + 범위∩칩 필터 ──
 def test_map_viewport_drives_list():
     out = _render([_item(lat=37.5, lng=127.03)], kakao_key="TESTKEY")
@@ -305,6 +373,8 @@ def test_map_js_absent_without_kakao_key():
     out = _render([_item()], kakao_key="")
     assert "dapi.kakao.com" not in out
     assert "mapDashFailed" not in out
+    assert "CustomOverlay" not in out
+    assert "createMarkerEl" not in out
     # 기존 칩 필터 JS는 그대로
     assert "button.chip" in out
     assert 'getElementById("js-empty")' in out
