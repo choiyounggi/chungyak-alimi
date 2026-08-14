@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from datetime import date
 
+import httpx
 from sqlalchemy import exists, select, update
 
+from .analysis import PdfExtractError, analyze_pdf_bytes
 from .collectors.applyhome import fetch_apt_house_types, fetch_apt_notices
-from .collectors.gh import fetch_gh_notices
+from .collectors.gh import _ssl_context, fetch_gh_detail_files, fetch_gh_notices
 from .collectors.hug import fetch_hug_notices
 from .collectors.lh import fetch_lh_detail, fetch_lh_notices, fetch_lh_supply
 from .collectors.myhome import fetch_myhome_notices
@@ -20,16 +23,21 @@ from .db import (
     NoticeHouseType,
     SessionLocal,
     evaluate_all,
+    get_notice_analysis,
     init_db,
     mark_notified,
     pending_notifications,
     upsert_house_types,
+    upsert_notice_analysis,
     upsert_notices,
 )
 from .filters import load_filter_config
 from .notify import notify_new_matches
 
 logger = logging.getLogger(__name__)
+
+_MAX_ANALYZE_PER_RUN = 20  # 배치당 분석 상한(D4) — 라즈베리파이 CPU 보호
+_MAX_PDF_BYTES = 30_000_000  # 다운로드 응답 크기 상한(D5)
 
 
 def _safe(fn, label: str, default):
@@ -146,6 +154,124 @@ def enrich_lh_detail() -> int:
     return added
 
 
+def enrich_gh_detail() -> int:
+    """GH 공고 상세의 PDF 첨부 URL 목록을 raw['_gh_detail']에 채운다. 처리 건수 반환(D1)."""
+    added = 0
+    with SessionLocal() as session:
+        q = select(Notice).where(Notice.source == "gh")
+        for n in session.scalars(q).all():
+            r = n.raw or {}
+            if "_gh_detail" in r:
+                continue
+            pbanc_no = r.get("_gh_pbanc_no")
+            if not pbanc_no:
+                continue
+            try:
+                files = fetch_gh_detail_files(pbanc_no, r.get("biz_ty_cd") or "")
+                session.execute(
+                    update(Notice)
+                    .where(Notice.pblanc_no == n.pblanc_no)
+                    .values(raw={**r, "_gh_detail": {"files": files}})
+                )
+                added += 1
+            except Exception:
+                logger.exception("GH 상세 보강 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
+        session.commit()
+    return added
+
+
+def _pdf_target_files(notice: Notice) -> list[dict]:
+    """LH/GH 공고의 raw 에서 분석 대상 PDF 파일 목록을 뽑는다(D2). 없으면 빈 리스트."""
+    r = notice.raw or {}
+    if notice.source == "lh":
+        return (r.get("_lh_detail") or {}).get("files") or []
+    if notice.source == "gh":
+        return (r.get("_gh_detail") or {}).get("files") or []
+    return []
+
+
+def _needs_pdf_analysis(existing, files: list[dict]) -> bool:
+    """멱등 스킵 판정(D3) — URL 집합이 같고 실패 항목이 없으면 재분석하지 않는다(D6)."""
+    if existing is None:
+        return True
+    if {f["url"] for f in existing.files} != {f["url"] for f in files}:
+        return True
+    return any(not f.get("ok") for f in existing.files)
+
+
+def _analyze_pdf_file(file: dict, client: httpx.Client) -> dict:
+    """파일 1건 다운로드+분석. 실패해도 예외를 던지지 않고 ok=False 항목으로 기록한다(D6)."""
+    name, url = file["name"], file["url"]
+    try:
+        resp = client.get(url)
+        resp.raise_for_status()
+        content = resp.content
+        if len(content) > _MAX_PDF_BYTES:
+            raise PdfExtractError("파일이 너무 큽니다(too large)")
+        analysis = analyze_pdf_bytes(content)
+    except (httpx.HTTPError, PdfExtractError) as e:
+        return {
+            "name": name, "url": url, "ok": False, "error": str(e),
+            "page_count": 0, "text_chars": 0, "sections": [],
+        }
+    return {"name": name, "url": url, "ok": True, "error": None, **analysis.model_dump()}
+
+
+def enrich_pdf_summaries(*, client: httpx.Client | None = None) -> int:
+    """LH/GH 공고의 PDF 를 내려받아 규칙 기반 분석 후 저장한다(D2~D6).
+
+    PDF 원본은 지역 변수로만 존재하며 디스크에 쓰지 않는다(원본 폐기 결정).
+    분석을 저장한 공고 수를 반환한다.
+    """
+    own_default = client is None
+    default_client = client or httpx.Client(timeout=30.0, follow_redirects=True)
+    gh_client: httpx.Client | None = None  # GH 후보가 있을 때만 생성(apply.gh.or.kr 인증서 이슈, D5)
+    analyzed = 0
+    try:
+        with SessionLocal() as session:
+            q = select(Notice).where(Notice.source.in_(("lh", "gh")))
+            candidates = []
+            for n in session.scalars(q).all():
+                files = _pdf_target_files(n)
+                if not files:
+                    continue
+                if _needs_pdf_analysis(get_notice_analysis(session, n.pblanc_no), files):
+                    candidates.append((n, files))
+
+            candidates.sort(key=lambda item: item[0].rcrit_pblanc_de or date.min, reverse=True)
+            carried = len(candidates) - _MAX_ANALYZE_PER_RUN
+            if carried > 0:
+                logger.info(
+                    "PDF 요약 분석: 이번 배치 %d건 분석, %d건 다음 배치로 이월",
+                    _MAX_ANALYZE_PER_RUN, carried,
+                )
+            batch = candidates[:_MAX_ANALYZE_PER_RUN]
+
+            for n, files in batch:
+                try:
+                    dl_client = default_client
+                    if client is None and n.source == "gh":
+                        # GH 파일 서버(apply.gh.or.kr)는 별도 SSL 컨텍스트가 필요하다 —
+                        # src.collectors.gh._ssl_context 재사용(같은 코드베이스 내부, D5).
+                        if gh_client is None:
+                            gh_client = httpx.Client(
+                                timeout=30.0, follow_redirects=True, verify=_ssl_context()
+                            )
+                        dl_client = gh_client
+                    results = [_analyze_pdf_file(f, dl_client) for f in files]
+                    upsert_notice_analysis(n.pblanc_no, n.source, results, session=session)
+                    analyzed += 1
+                except Exception:
+                    logger.exception("공고 PDF 요약 분석 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
+            session.commit()
+    finally:
+        if own_default:
+            default_client.close()
+        if gh_client is not None:
+            gh_client.close()
+    return analyzed
+
+
 def run_batch(*, notify: bool = True) -> dict:
     """수집 → 저장 → 평가 → (알림). 배치 1회."""
     init_db()
@@ -168,6 +294,8 @@ def run_batch(*, notify: bool = True) -> dict:
     lh_enriched = _safe(enrich_lh_supply, "LH 공급정보 보강", 0)
     lh_detailed = _safe(enrich_lh_detail, "LH 상세 보강", 0)
     polygons = _safe(enrich_polygons, "필지 폴리곤 보강", 0)
+    gh_detailed = _safe(enrich_gh_detail, "GH 상세 보강", 0)
+    pdf_summaries = _safe(enrich_pdf_summaries, "공고 PDF 요약 분석", 0)
     sent = notify_new_matches() if notify else 0
     return {
         "collected": len(notices),
@@ -180,6 +308,8 @@ def run_batch(*, notify: bool = True) -> dict:
         "lh_enriched": lh_enriched,
         "lh_detailed": lh_detailed,
         "polygons": polygons,
+        "gh_detailed": gh_detailed,
+        "pdf_summaries": pdf_summaries,
         "evaluated": total,
         "matched": matched,
         "sent": sent,

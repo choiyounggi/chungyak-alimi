@@ -23,6 +23,7 @@ from ..db import (
     SessionLocal,
     add_bookmark,
     bookmarked_pblanc_nos,
+    get_notice_analysis,
     house_types_of,
     init_db,
     remove_bookmark,
@@ -380,6 +381,19 @@ def notice_detail_data(session, n) -> dict:
             superseded_by = reason.split(":", 1)[1]
 
     lh = raw.get("_lh_detail") or {}
+
+    analysis_row = get_notice_analysis(session, n.pblanc_no)
+    analysis = None
+    if analysis_row is not None:
+        ok_files = [
+            f for f in analysis_row.files if f.get("ok") and f.get("sections")
+        ]
+        if ok_files:
+            analysis = {
+                "files": ok_files,
+                "updated_at": analysis_row.updated_at.strftime("%Y-%m-%d"),
+            }
+
     return {
         "notice": n,
         "judged": judged,
@@ -391,6 +405,7 @@ def notice_detail_data(session, n) -> dict:
         "regs": regs,
         "lh_images": lh.get("images") or [],
         "lh_files": lh.get("files") or [],
+        "analysis": analysis,
         "adres": raw.get("HSSPLY_ADRES") or n.hsslpy_adres,
         "tel": raw.get("MDHS_TELNO"),
         "builder": raw.get("CNSTRCT_ENTRPS_NM"),
