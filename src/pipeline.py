@@ -260,10 +260,15 @@ def enrich_pdf_summaries(*, client: httpx.Client | None = None) -> int:
                         dl_client = gh_client
                     results = [_analyze_pdf_file(f, dl_client) for f in files]
                     upsert_notice_analysis(n.pblanc_no, n.source, results, session=session)
+                    # 공고 단위 커밋 — upsert 가 DB 오류로 실패하면 세션 트랜잭션이
+                    # aborted 로 남아 이후 공고들의 upsert 까지 전부
+                    # InFailedSqlTransaction 으로 연쇄 실패한다(2026-08-14 프로덕션
+                    # 실측). 성공분은 즉시 확정하고, 실패는 rollback 으로 격리한다.
+                    session.commit()
                     analyzed += 1
                 except Exception:
                     logger.exception("공고 PDF 요약 분석 실패(pblanc_no=%s) — 건너뜀", n.pblanc_no)
-            session.commit()
+                    session.rollback()
     finally:
         if own_default:
             default_client.close()
