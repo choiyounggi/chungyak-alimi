@@ -21,7 +21,7 @@ ICON_IDS = [
     "i-pin", "i-calendar", "i-won", "i-home", "i-award", "i-doc", "i-clip",
     "i-image", "i-map", "i-search", "i-target", "i-arrow-left", "i-arrow-right",
     "i-gift", "i-building", "i-ruler", "i-clock", "i-alert", "i-bookmark",
-    "i-eye", "i-eye-off",
+    "i-eye", "i-eye-off", "i-user",
 ]
 
 # 브리프 [색상/라운드/간격/폰트] — :root 토큰 정의(선언부, `--name:` 형태로 존재 검증).
@@ -159,10 +159,10 @@ def test_base_defines_every_icon_symbol(icon_id):
 
 
 # ── 정상: symbol 정확히 21개(누락·초과 방지) ──
-def test_base_has_exactly_21_symbols():
+def test_base_has_exactly_22_symbols():
     out = _env().get_template("base.html").render()
     symbols = re.findall(r'<symbol\b', out)
-    assert len(symbols) == len(ICON_IDS) == 21, f"symbol 개수 불일치: {len(symbols)}"
+    assert len(symbols) == len(ICON_IDS) == 22, f"symbol 개수 불일치: {len(symbols)}"
 
 
 # ── 정상: 상단 내비(전체/북마크) + 북마크 토글 JS 계약 ──
