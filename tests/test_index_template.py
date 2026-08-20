@@ -337,15 +337,15 @@ def test_marker_customoverlay_replaces_marker_infowindow():
 def test_marker_css_matches_spec():
     out = _render([_item()], kakao_key="TESTKEY")
     assert ".mk{" in out
-    assert "border-radius:6px 6px 6px 0" in out
+    assert "border-radius:var(--r-md) var(--r-md) var(--r-md) 0" in out
     assert "box-shadow:1px 2px 4px rgba(0,0,0,.16)" in out
     assert "cursor:pointer" in out
     assert ".mk__type{" in out
     assert ".mk__figure{" in out
     assert "border-radius:0 0 5px 0" in out
-    assert ".mk--selected{" in out and "scale(1.08)" in out
-    assert ".mk--closing .mk__figure{color:var(--danger)}" in out
-    assert ".mk--closed{--band:var(--muted-soft)}" in out
+    assert ".mk--selected{border-color:var(--color-ink)" in out and "scale(1.08)" not in out
+    assert ".mk--closing .mk__figure{color:var(--color-signal)}" in out
+    assert ".mk--closed{--band:var(--color-faint)}" in out
 
 
 # ── 마커 dday 분기(정상/경계/에러): 스펙 4분기가 JS 소스에 그대로 존재 ──
