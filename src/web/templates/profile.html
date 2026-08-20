@@ -7,16 +7,16 @@
   .wrap{max-width:720px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
   @media (max-width:640px){ .grid{grid-template-columns:1fr} }
-  select{width:100%;padding:13px 14px;border:1px solid var(--hairline);border-radius:var(--r-md);
-    font-size:15px;background:var(--canvas);color:var(--ink);font-family:inherit;outline:none}
-  select:focus{border-color:var(--ink)}
-  select.invalid{border-color:var(--danger)}
+  select{width:100%;padding:13px 14px;border:1px solid var(--color-rule);border-radius:var(--r-md);
+    font-size:15px;background:var(--color-paper);color:var(--color-ink);font-family:inherit;outline:none}
+  select:focus{border-color:var(--color-accent)}
+  select.invalid{border-color:var(--color-signal)}
   /* 체크박스는 라벨을 옆에 두는 인라인 배치(base의 block label 오버라이드) */
   .check{display:flex;align-items:center;gap:9px;margin-bottom:12px}
   .check input{width:auto;padding:0}
   .check label{margin:0;font-weight:600}
-  .hint{color:var(--muted);font-size:12.5px;margin:-6px 0 14px}
-  .saved{background:#E6F6EE;color:#136c3a;border-radius:var(--r-md);padding:11px 13px;
+  .hint{color:var(--color-muted);font-size:12.5px;margin:-6px 0 14px}
+  .saved{background:var(--color-ok-soft);color:var(--color-ok);border-radius:var(--r-md);padding:11px 13px;
     font-size:13.5px;font-weight:700;margin-bottom:16px}
   .actions{display:flex;justify-content:flex-end;margin-top:4px}
 </style>
