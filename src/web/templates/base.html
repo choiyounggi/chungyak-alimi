@@ -4,177 +4,213 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}청약 알리미{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;700&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
+  /* Hallmark · genre: editorial · design-system: design.md · designed-as-app · theme: 관보-custom (paper oklch(97.5% .012 85) · accent oklch(40% .065 195) · Hahmlet + IBM Plex Sans KR) */
   :root{
-    /* 색상 */
-    --canvas:#fffaf0; --surface-soft:#faf5e8; --surface-card:#f5f0e0; --surface-strong:#ebe6d6;
-    --ink:#0a0a0a; --body-strong:#1a1a1a; --body:#3a3a3a; --muted:#6a6a6a; --muted-soft:#9a9a9a;
-    --hairline:#e5e5e5; --hairline-soft:#f0f0f0;
-    --primary:#0a0a0a; --primary-active:#1f1f1f; --primary-disabled:#e5e5e5; --on-primary:#ffffff;
-    --accent-teal:#1a3a3a; --on-teal:#ffffff; --accent-peach:#ffb084; --accent-peach-soft:#fff1e6;
-    --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
-    /* 라운드 */
-    --r-xs:6px; --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:24px; --r-pill:9999px;
-    /* 간격 */
-    --s-xxs:4px; --s-xs:8px; --s-sm:12px; --s-md:16px; --s-lg:24px; --s-xl:32px; --s-xxl:48px; --s-section:96px;
+    /* 색상 — 관보 에디토리얼 (design.md Exports) */
+    --color-paper:oklch(97.5% 0.012 85); --color-paper-2:oklch(95% 0.014 85);
+    --color-paper-3:oklch(92% 0.014 85);
+    --color-ink:oklch(22% 0.012 70); --color-body:oklch(32% 0.010 70);
+    --color-muted:oklch(48% 0.008 70); --color-faint:oklch(62% 0.006 70);
+    --color-rule:oklch(84% 0.010 85); --color-rule-strong:oklch(30% 0.012 70);
+    --color-accent:oklch(40% 0.065 195); --color-accent-soft:oklch(93% 0.02 195);
+    --color-signal:oklch(55% 0.19 35); --color-signal-soft:oklch(95% 0.03 35);
+    --color-warn:oklch(62% 0.13 75); --color-ok:oklch(55% 0.10 165);
+    --color-ok-soft:oklch(94% 0.04 165);
+    --color-focus:oklch(40% 0.065 195);
     /* 폰트 */
-    --font-sans: -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",Pretendard,sans-serif;
+    --font-display:"Hahmlet","Apple SD Gothic Neo",serif;
+    --font-body:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo",sans-serif;
+    --font-mono:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,monospace;
+    --text-sm:13px; --text-base:15.5px; --text-md:17px;
+    --text-lg:21px; --text-xl:26px; --text-2xl:33px;
+    /* 라운드 */
+    --r-xs:3px; --r-sm:4px; --r-md:6px; --r-lg:8px; --r-pill:9999px;
+    /* 간격 */
+    --s-xxs:4px; --s-xs:8px; --s-sm:12px; --s-md:16px; --s-lg:24px;
+    --s-xl:32px; --s-xxl:48px;
+    /* 모션 */
+    --ease-out:cubic-bezier(0.16, 1, 0.3, 1);
+    --dur-fast:120ms; --dur-base:180ms;
+
+    /* 구 토큰 별칭 — 페이지 태스크가 이관할 때까지 유지 */
+    --canvas:var(--color-paper); --surface-soft:var(--color-paper-2);
+    --surface-card:var(--color-paper-2); --surface-strong:var(--color-paper-3);
+    --ink:var(--color-ink); --body-strong:var(--color-ink); --body:var(--color-body);
+    --muted:var(--color-muted); --muted-soft:var(--color-faint);
+    --hairline:var(--color-rule); --hairline-soft:var(--color-rule);
+    --primary:var(--color-ink); --primary-active:var(--color-body);
+    --primary-disabled:var(--color-rule); --on-primary:var(--color-paper);
+    --accent-teal:var(--color-accent); --on-teal:var(--color-paper);
+    --accent-peach:var(--color-signal-soft); --accent-peach-soft:var(--color-paper-2);
+    --ok:var(--color-ok); --warn:var(--color-warn); --danger:var(--color-signal);
+    --font-sans:var(--font-body);
+    --s-section:96px; --r-xl:12px;
   }
 
   /* 타이포 트리트먼트 */
   *{box-sizing:border-box}
-  body{margin:0;font-family:var(--font-sans);color:var(--body);background:var(--canvas);
-    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
-  h1{font-size:32px;font-weight:700;letter-spacing:-.03em;color:var(--ink);line-height:1.15;margin:0}
-  h2{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--ink);margin:0}
-  .display{font-size:40px;font-weight:700;letter-spacing:-.03em}
-  b,strong{color:var(--body-strong);font-weight:700}
-  .muted{color:var(--muted)}
-  .sub{color:var(--muted);font-size:13.5px}
+  body{margin:0;font-family:var(--font-body);color:var(--color-body);background:var(--color-paper);
+    font-size:var(--text-base);line-height:1.65;-webkit-font-smoothing:antialiased}
+  h1{font-family:var(--font-display);font-size:var(--text-xl);font-weight:700;letter-spacing:-.02em;
+    color:var(--color-ink);line-height:1.2;margin:0}
+  h2{font-family:var(--font-display);font-size:var(--text-lg);font-weight:600;letter-spacing:-.02em;
+    color:var(--color-ink);margin:0}
+  .display{font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;letter-spacing:-.02em}
+  b,strong{color:var(--color-ink);font-weight:700}
+  .muted{color:var(--color-muted)}
+  .sub{color:var(--color-muted);font-size:var(--text-sm)}
 
-  /* 상단바 · 브랜드 · 내비 */
-  .topbar{background:var(--canvas);border-bottom:1px solid var(--hairline);color:var(--ink)}
+  /* 상단바 · 브랜드 · 내비 — 제호 + double rule (관보 제호 관습) */
+  .topbar{background:var(--color-paper);border-bottom:3px double var(--color-rule-strong);color:var(--color-ink)}
   .topbar .inner{max-width:840px;margin:0 auto;padding:16px 20px;
     display:flex;align-items:center;justify-content:space-between;gap:16px}
-  .topbar a{color:var(--ink);text-decoration:none}
-  .brand{color:var(--ink);font-weight:800;letter-spacing:-.02em;font-size:18px}
+  .topbar a{color:var(--color-ink);text-decoration:none}
+  .brand{font-family:var(--font-display);color:var(--color-ink);font-weight:700;letter-spacing:-.02em;font-size:20px}
   .topnav{display:flex;gap:4px;flex:none}
   .topnav a{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:700;
-    color:var(--muted);padding:6px 12px;border-radius:var(--r-pill)}
-  .topnav a:hover{color:var(--ink);background:var(--surface-soft)}
+    color:var(--color-muted);padding:6px 2px;border-radius:0}
+  .topnav a:hover{text-decoration:underline;text-underline-offset:3px;color:var(--color-ink)}
   .topnav .ic{width:16px;height:16px}
   /* 로그아웃 POST 폼: 링크와 같은 모양이지만 동작은 button (상태 변경) */
   .topnav .nav-form{display:flex;margin:0}
   .topnav .nav-btn{border:none;background:none;cursor:pointer;font-family:inherit;
     display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:700;
-    color:var(--muted);padding:6px 12px;border-radius:var(--r-pill)}
-  .topnav .nav-btn:hover{color:var(--ink);background:var(--surface-soft)}
+    color:var(--color-muted);padding:6px 2px;border-radius:0}
+  .topnav .nav-btn:hover{text-decoration:underline;text-underline-offset:3px;color:var(--color-ink)}
 
   /* 카드 내부 공용 레이아웃(대시보드·북마크 페이지 공유) */
   .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
   .head-actions{display:flex;align-items:center;gap:8px;flex:none}
   /* 카드 위계 v2(수치 우선) — 상단 행: 좌 유형 dot+라벨, 우 순위·선호·기관·북마크 */
   .card__top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
-  .type-tag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--body)}
-  .type-tag i{width:8px;height:8px;border-radius:50%;background:var(--accent-teal);display:inline-block}
-  .type-tag--muted i{background:var(--muted-soft)}
-  /* 핵심 수치(D-day) — 타이틀급, 마감 임박도(closing→danger, warn→warn), 예정(pre)은 뮤트 */
-  .figure{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-.02em;margin:8px 0 4px}
-  .figure--pre{color:var(--muted-soft)}
-  .figure--closing{color:var(--danger)}
-  .figure--warn{color:var(--warn)}
-  a.title{color:var(--ink);text-decoration:none;font-size:15px;font-weight:600;letter-spacing:-.01em;line-height:1.4;display:block;margin-bottom:6px}
-  a.title:hover{color:var(--accent-teal)}
-  .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--body)}
-  .row b{color:var(--body-strong);font-weight:700}
-  .row .ic{color:var(--muted)}
+  .type-tag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--color-body)}
+  .type-tag i{width:8px;height:8px;border-radius:50%;background:var(--color-accent);display:inline-block}
+  .type-tag--muted i{background:var(--color-faint)}
+  /* 핵심 수치(D-day) — 관보 수치는 Plex Mono(tabular-nums). 마감 임박도(closing→signal, warn→warn), 예정(pre)은 뮤트 */
+  .figure{font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+    font-size:18px;font-weight:700;color:var(--color-ink);letter-spacing:-.02em;margin:8px 0 4px}
+  .figure--pre{color:var(--color-faint)}
+  .figure--closing{color:var(--color-signal)}
+  .figure--warn{color:var(--color-warn)}
+  a.title{color:var(--color-ink);text-decoration:none;font-size:15px;font-weight:600;letter-spacing:-.01em;line-height:1.4;display:block;margin-bottom:6px}
+  a.title:hover{color:var(--color-accent)}
+  .row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:13.5px;color:var(--color-body)}
+  .row b{color:var(--color-ink);font-weight:700}
+  .row .ic{color:var(--color-muted)}
   /* 북마크 토글 버튼(카드 우측 상단에 항상 고정) */
   .bookmark-btn{position:absolute;top:12px;right:12px;border:none;background:none;cursor:pointer;
-    color:var(--muted-soft);padding:4px;border-radius:var(--r-sm);display:inline-flex;align-items:center;
+    color:var(--color-faint);padding:4px;border-radius:var(--r-sm);display:inline-flex;align-items:center;
     line-height:1;font-family:inherit}
-  .bookmark-btn:hover{color:var(--accent-teal);background:var(--surface-soft)}
+  .bookmark-btn:hover{color:var(--color-accent);background:var(--color-paper-2)}
   .bookmark-btn .ic{width:22px;height:22px}
   /* 체크(북마크됨) 시 테두리뿐 아니라 아이콘 내부 색을 채워 명확히 구분 */
-  .bookmark-btn.is-on{color:var(--accent-teal)}
-  .bookmark-btn.is-on .ic{fill:var(--accent-teal)}
+  .bookmark-btn.is-on{color:var(--color-accent)}
+  .bookmark-btn.is-on .ic{fill:var(--color-accent)}
 
   /* 컨테이너 */
   .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
 
-  /* 버튼 */
+  /* 버튼 — CTA voice: primary 도장(ink 채움), secondary 테두리만 */
   .btn{border-radius:var(--r-md);height:44px;padding:12px 20px;font-weight:700;font-size:14px;
     display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
     border:none;font-family:inherit;text-decoration:none}
-  .btn-primary{background:var(--primary);color:var(--on-primary)}
-  .btn-primary:hover{background:var(--primary-active)}
-  .btn-secondary{background:var(--canvas);color:var(--ink);border:1px solid var(--hairline)}
-  .btn-secondary:hover{border-color:var(--ink)}
+  .btn-primary{background:var(--color-ink);color:var(--color-paper)}
+  .btn-primary:hover{background:var(--color-body)}
+  .btn-secondary{background:transparent;color:var(--color-ink);border:1px solid var(--color-ink)}
+  .btn-secondary:hover{background:var(--color-paper-2)}
 
-  /* 카드 · 섹션 (그림자 없음/옅게, transform 금지) */
-  .card{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0;position:relative}
-  .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.05)}
-  .section{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-lg);padding:18px 20px;margin:12px 0}
-  /* 섹션 제목과 내용 사이 구분선 */
-  .section h2{border-bottom:1px solid var(--hairline);padding-bottom:12px;margin-bottom:16px}
+  /* 카드 · 섹션 — 지면 행(ledger row): 상자·그림자·hover lift 폐지, 하단 헤어라인 룰 + hover 배경 스왑 */
+  .card{background:transparent;border:0;border-bottom:1px solid var(--color-rule);border-radius:0;
+    padding:16px 4px;margin:0;position:relative;transition:background-color var(--dur-fast) var(--ease-out)}
+  .card:hover{background:var(--color-paper-2);box-shadow:none}
+  .section{border:0;background:transparent;padding:18px 0}
+  /* 섹션 제목 아래 double rule — 관보 제호 관습 */
+  .section h2{border-bottom:3px double var(--color-rule-strong);padding-bottom:10px;margin-bottom:14px}
 
   /* 뱃지 (D-day 변형) */
   .badge{display:inline-block;font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill);white-space:nowrap}
-  .badge--soon{background:var(--danger);color:#fff}
-  .badge--mid{background:var(--warn);color:#fff}
-  .badge--far{color:var(--ok);background:#E6F6EE}
-  .badge--pre{color:var(--accent-teal);background:#e7efee}
+  .badge--soon{background:var(--color-signal);color:var(--color-paper)}
+  .badge--mid{background:var(--color-warn);color:var(--color-paper)}
+  .badge--far{color:var(--color-ok);background:var(--color-ok-soft)}
+  .badge--pre{color:var(--color-accent);background:var(--color-accent-soft)}
 
   /* 지역 태그 */
-  .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--accent-teal);background:#e7efee;
+  .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--color-accent);background:var(--color-accent-soft);
     padding:3px 10px;border-radius:var(--r-pill)}
 
-  /* 순위 태그 (1순위=teal 채움=최우선, 2순위=약한 teal) */
-  .rank{display:inline-block;border-radius:var(--r-pill);font-weight:800;font-size:12px;padding:3px 10px}
-  .rank-1{color:var(--on-teal);background:var(--accent-teal)}
-  .rank-2{color:var(--accent-teal);background:#e7efee}
+  /* 순위 태그 (1순위=accent 채움=최우선, 2순위=약한 accent) */
+  .rank{display:inline-block;border-radius:var(--r-pill);font-weight:700;font-size:12px;padding:3px 10px;
+    font-variant-numeric:tabular-nums}
+  .rank-1{color:var(--on-teal);background:var(--color-accent)}
+  .rank-2{color:var(--color-accent);background:var(--color-accent-soft)}
 
-  /* 필터 칩 */
-  .chip{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-pill);padding:7px 14px;
-    font-size:13px;font-weight:600;color:var(--body);font-family:inherit;line-height:1.2}
+  /* 필터 칩 — pill 셰이프 유지, 그라데이션 금지 */
+  .chip{background:var(--color-paper);border:1px solid var(--color-rule);border-radius:var(--r-pill);padding:7px 14px;
+    font-size:13px;font-weight:600;color:var(--color-body);font-family:inherit;line-height:1.2}
   /* 클릭 가능한 필터 칩 — 상호작용 어포던스(테두리·hover·선택 채움) */
-  button.chip{cursor:pointer;transition:border-color .12s,background-color .12s,color .12s}
-  button.chip:hover{border-color:var(--ink);color:var(--ink)}
-  button.chip.active{background:var(--accent-teal);border-color:var(--accent-teal);color:var(--on-teal)}
+  button.chip{cursor:pointer;transition:border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out)}
+  button.chip:hover{border-color:var(--color-ink);color:var(--color-ink)}
+  button.chip.active{background:var(--color-accent);border-color:var(--color-accent);color:var(--on-teal)}
   /* 고정(읽기 전용) 조건 칩 — 클릭 불가임을 구분: 점선 테두리 + 소프트 배경 + 뮤트 텍스트 */
-  .chip--info{background:var(--surface-soft);border:1px dashed var(--hairline);color:var(--muted);cursor:default}
+  .chip--info{background:var(--color-paper-2);border:1px dashed var(--color-rule);color:var(--color-muted);cursor:default}
 
   /* 테이블 */
   .table{width:100%;border-collapse:collapse}
-  .table th,.table td{padding:9px 8px;border-bottom:1px solid var(--hairline);text-align:right;white-space:nowrap}
+  .table th,.table td{padding:9px 8px;border-bottom:1px solid var(--color-rule);text-align:right;white-space:nowrap}
   .table th:first-child,.table td:first-child{text-align:left}
-  .table th{color:var(--muted);font-size:12.5px;font-weight:700}
+  .table th{color:var(--color-muted);font-size:12.5px;font-weight:700}
   /* 넓은 테이블은 모바일에서 가로 스크롤(줄바꿈/화면깨짐 방지) */
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 
-  /* 폼 */
-  label{display:block;font-size:13px;font-weight:700;color:var(--body);margin:0 0 6px}
-  input{width:100%;padding:13px 14px;border:1px solid var(--hairline);border-radius:var(--r-md);
-    font-size:15px;background:var(--canvas);color:var(--ink);outline:none;font-family:inherit}
-  input:focus{border-color:var(--ink)}
-  input.invalid{border-color:var(--danger)}
+  /* 폼 — 좁은 단 서식 리듬: 1px 룰 테두리 + focus 남록 */
+  label{display:block;font-size:13px;font-weight:700;color:var(--color-body);margin:0 0 6px}
+  input{width:100%;padding:13px 14px;border:1px solid var(--color-rule);border-radius:var(--r-md);
+    font-size:15px;background:var(--color-paper);color:var(--color-ink);outline:none;font-family:inherit}
+  input:focus{border-color:var(--color-accent)}
+  input.invalid{border-color:var(--color-signal)}
   .field{margin-bottom:16px}
-  .field-error{display:none;color:var(--danger);font-size:12.5px;font-weight:600;margin-top:6px}
+  .field-error{display:none;color:var(--color-signal);font-size:12.5px;font-weight:600;margin-top:6px}
   .field.has-error .field-error{display:block}
-  .form-error{background:#FDECEC;color:var(--danger);border-radius:var(--r-md);padding:11px 13px;
+  .form-error{background:var(--color-signal-soft);color:var(--color-signal);border-radius:var(--r-md);padding:11px 13px;
     font-size:13.5px;font-weight:600;margin-bottom:16px}
   /* 비밀번호 마스킹 토글 — 입력칸 안쪽 우측에 겹쳐 둔다(터치 타깃 44x44) */
   .pw-wrap{position:relative}
   .pw-wrap input{padding-right:52px}
   .pw-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);
     width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
-    background:none;border:0;padding:0;color:var(--muted);cursor:pointer;border-radius:var(--r-md)}
-  .pw-toggle:hover{color:var(--ink)}
-  .pw-toggle:focus-visible{outline:1px solid var(--ink)}
+    background:none;border:0;padding:0;color:var(--color-muted);cursor:pointer;border-radius:var(--r-md)}
+  .pw-toggle:hover{color:var(--color-ink)}
+  .pw-toggle:focus-visible{outline:1px solid var(--color-ink)}
   .pw-toggle .ic{width:20px;height:20px}
 
-  /* 온보딩 미완성 배너 — 차단이 아니라 유도(O5) */
+  /* 온보딩 미완성 배너 — 차단이 아니라 유도(O5). 좌측 accent 룰로 강조 */
   .onboarding-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
-    gap:8px 16px;background:var(--accent-peach-soft);border-radius:var(--r-md);
-    padding:12px 14px;margin-bottom:var(--s-md);font-size:13.5px;color:var(--body-strong)}
+    gap:8px 16px;background:var(--accent-peach-soft);border-radius:var(--r-md);border-left:3px solid var(--color-accent);
+    padding:12px 14px;margin-bottom:var(--s-md);font-size:13.5px;color:var(--color-ink)}
   .onboarding-banner a{display:inline-flex;align-items:center;gap:5px;
-    color:var(--ink);font-weight:700;text-decoration:none;white-space:nowrap}
+    color:var(--color-ink);font-weight:700;text-decoration:none;white-space:nowrap}
   .onboarding-banner a:hover{text-decoration:underline}
 
   /* 비동기 동작 실패를 알리는 공용 토스트. 빈 상태에서는 opacity:0 + pointer-events:none 이라
      화면을 가리지 않는다(마크업은 항상 있고 .is-on 으로만 드러난다). */
   .toast{position:fixed;left:50%;bottom:24px;z-index:1000;transform:translate(-50%,8px);
-    max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--r-pill);
-    background:var(--ink);color:var(--on-primary);font-size:13.5px;text-align:center;
-    box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:0;pointer-events:none;
-    transition:opacity .18s ease,transform .18s ease}
+    max-width:calc(100vw - 32px);padding:10px 16px;border-radius:var(--r-lg);
+    background:var(--color-ink);color:var(--color-paper);font-size:13.5px;text-align:center;
+    box-shadow:0 2px 10px rgba(0,0,0,.15);opacity:0;pointer-events:none;
+    transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--ease-out)}
   .toast.is-on{opacity:1;transform:translate(-50%,0)}
 
   /* 크림 푸터 (다크 아님) */
-  .footer{background:var(--surface-soft);color:var(--body);border-top:1px solid var(--hairline-soft);
+  .footer{background:var(--color-paper-2);color:var(--color-body);border-top:1px solid var(--color-rule);
     padding:40px 20px;text-align:center;font-size:12px}
 
   /* 빈 상태 */
-  .empty{text-align:center;color:var(--muted);padding:64px 0}
+  .empty{text-align:center;color:var(--color-muted);padding:64px 0}
 
   /* SVG 아이콘 헬퍼 */
   .ic{width:1em;height:1em;vertical-align:-0.15em;stroke:currentColor;fill:none;flex-shrink:0}
@@ -188,11 +224,17 @@
   @media (max-width:640px){
     .topbar .inner{padding:14px 16px}
     .wrap{padding:18px 16px 60px}
-    h1{font-size:25px}
+    h1{font-size:24px}
     .display{font-size:28px}
-    .card,.section{padding:15px 16px}
+    .card{padding:14px 4px}
+    .section{padding:14px 0}
     .table th,.table td{padding:8px 7px;font-size:12px}
     .footer{padding:32px 16px}
+  }
+
+  /* 모션 규율: 애니메이션 축소를 요청한 사용자에게는 전환을 사실상 끈다 */
+  @media (prefers-reduced-motion:reduce){
+    *{transition-duration:.01ms!important;animation:none!important}
   }
 </style>
 {% block head %}{% endblock %}
