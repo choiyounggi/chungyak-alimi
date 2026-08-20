@@ -36,6 +36,9 @@
     --ease-out:cubic-bezier(0.16, 1, 0.3, 1);
     --dur-fast:120ms; --dur-base:180ms;
 
+    /* 상단바 높이 — JS가 실측해 갱신(sticky 필터/지도 오프셋 계산용), 미로드 시 이 값 사용 */
+    --topbar-h:60px;
+
     /* 구 토큰 별칭 — 페이지 태스크가 이관할 때까지 유지 */
     --canvas:var(--color-paper); --surface-soft:var(--color-paper-2);
     --surface-card:var(--color-paper-2); --surface-strong:var(--color-paper-3);
@@ -65,7 +68,8 @@
   .sub{color:var(--color-muted);font-size:var(--text-sm)}
 
   /* 상단바 · 브랜드 · 내비 — 제호 + double rule (관보 제호 관습) */
-  .topbar{background:var(--color-paper);border-bottom:3px double var(--color-rule-strong);color:var(--color-ink)}
+  .topbar{position:sticky;top:0;z-index:100;
+    background:var(--color-paper);border-bottom:3px double var(--color-rule-strong);color:var(--color-ink)}
   .topbar .inner{max-width:840px;margin:0 auto;padding:16px 20px;
     display:flex;align-items:center;justify-content:space-between;gap:16px}
   .topbar a{color:var(--color-ink);text-decoration:none}
@@ -315,6 +319,18 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { el.classList.remove("is-on"); }, 3200);
   }
+
+  // 상단바 실측 높이를 --topbar-h로 반영(sticky 필터·지도 오프셋이 겹치지 않게).
+  // .topbar가 없거나 JS가 막히면 :root의 fallback(60px)으로 그대로 동작(점진적 향상).
+  (function () {
+    var topbar = document.querySelector(".topbar");
+    if (!topbar) return;
+    function syncTopbarHeight() {
+      document.documentElement.style.setProperty("--topbar-h", topbar.offsetHeight + "px");
+    }
+    syncTopbarHeight();
+    window.addEventListener("resize", syncTopbarHeight);
+  })();
 
   // 북마크 토글: 카드·북마크 페이지의 .bookmark-btn 클릭 → PUT/DELETE 후 아이콘 상태 갱신.
   (function () {

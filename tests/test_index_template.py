@@ -466,6 +466,37 @@ def test_matches_type_handles_agency():
     assert "chungyakChipMatch" in out or "window.chungyakApplyList" in out
 
 
+# ── 정상: 필터 영역이 topbar 바로 아래(--topbar-h)에 sticky로 고정되고 불투명 배경을 가진다 ──
+def test_filters_sticky_below_topbar_with_opaque_background():
+    out = _render([_item()])
+    m = re.search(r"\.filters\{[^}]*\}", out)
+    assert m, ".filters 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "position:sticky" in rule
+    assert "top:var(--topbar-h" in rule
+    assert "background:var(--color-paper)" in rule
+
+
+# ── 에러: 필터 z-index가 topbar(100)보다 낮아야 한다(topbar를 가리면 안 됨, 위계 역전 방지) ──
+def test_filters_z_index_stays_below_topbar():
+    out = _render([_item()])
+    m = re.search(r"\.filters\{[^}]*z-index:(\d+)", out)
+    assert m, ".filters z-index 선언 파싱 실패"
+    filters_z = int(m.group(1))
+    assert filters_z == 90
+    assert filters_z < 100, f".filters z-index({filters_z})가 topbar(100) 이상 — topbar를 가릴 수 있음"
+
+
+# ── 경계값: #chungyak-map 오프셋 계산은 CSS 텍스트라 kakao_key 유무와 무관하게 항상 동일 ──
+def test_map_offset_uses_topbar_height_var():
+    for kakao_key in ("TESTKEY", ""):
+        out = _render([_item()], kakao_key=kakao_key)
+        m = re.search(r"#chungyak-map\{[^}]*\}", out)
+        assert m, f"#chungyak-map 규칙 파싱 실패(kakao_key={kakao_key!r})"
+        rule = m.group(0)
+        assert "top:calc(var(--topbar-h, 60px) + 16px)" in rule
+
+
 # ── 경계: 지역/유형 미설정 시 '전국/전체 유형'이 고정 조건으로 표기 ──
 def test_fixed_fallbacks_when_no_region_type():
     out = _render([_item()], _cfg(regions=[], house_types=[]))

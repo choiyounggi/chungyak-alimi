@@ -266,6 +266,49 @@ def test_child_can_override_blocks():
     assert 'id="i-pin"' in out
 
 
+# ── 정상: topbar가 sticky로 상단에 고정되고 불투명 배경으로 본문 겹침을 막는다 ──
+def test_base_topbar_is_sticky_with_opaque_background():
+    out = _env().get_template("base.html").render()
+    m = re.search(r"\.topbar\{[^}]*\}", out)
+    assert m, ".topbar 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "position:sticky" in rule
+    assert "top:0" in rule
+    assert "background:var(--color-paper)" in rule
+
+
+# ── 정상: --topbar-h 레이아웃 변수가 fallback 값으로 선언되고, JS가 실측해 갱신한다 ──
+def test_base_declares_topbar_height_var_and_sync_script():
+    out = _env().get_template("base.html").render()
+    assert "--topbar-h:60px" in out
+    assert 'document.querySelector(".topbar")' in out
+    assert 'setProperty("--topbar-h"' in out
+    assert 'addEventListener("resize"' in out
+
+
+# ── 에러: topbar의 z-index가 toast(1000)보다 낮아야 한다(위계 역전 방지 회귀 가드) ──
+def test_base_topbar_z_index_stays_below_toast():
+    out = _env().get_template("base.html").render()
+    topbar_m = re.search(r"\.topbar\{[^}]*z-index:(\d+)", out)
+    toast_m = re.search(r"\.toast\{[^}]*z-index:(\d+)", out)
+    assert topbar_m and toast_m, "z-index 선언 파싱 실패"
+    topbar_z = int(topbar_m.group(1))
+    toast_z = int(toast_m.group(1))
+    assert topbar_z < toast_z, f"topbar z-index({topbar_z})가 toast({toast_z}) 이상 — 토스트가 가려질 수 있음"
+
+
+# ── 경계값: .topbar가 없는 페이지(topbar 블록 override)에서도 높이 동기화 스크립트가 예외 없이 조용히 반환 ──
+def test_base_topbar_height_sync_noop_when_topbar_absent():
+    child = (
+        '{% extends "base.html" %}'
+        "{% block topbar %}{% endblock %}"
+        '{% block content %}<p class="marker">본문</p>{% endblock %}'
+    )
+    out = _env(child).get_template("_child.html").render()
+    assert 'class="marker"' in out  # 렌더는 예외 없이 끝까지 진행됨
+    assert "if (!topbar) return;" in out  # 가드 존재(부재 시 조용히 종료)
+
+
 # ── error-case (DoD): base.html 소스에 이모지 0개 ──
 def test_base_has_no_emoji():
     raw = BASE.read_text(encoding="utf-8")
