@@ -7,17 +7,17 @@
   body{min-height:100vh;display:flex;align-items:center;justify-content:center}
   main.wrap{width:100%;max-width:380px;padding:24px 20px}
   .login-head{text-align:center;margin-bottom:var(--s-lg)}
-  .login-head h1{color:var(--accent-teal)}
+  .login-head h1{color:var(--color-accent)}
   .form-error{display:flex;gap:var(--s-xs);align-items:center}
   form .btn-primary{width:100%;margin-top:var(--s-xxs)}
   /* 입력 규칙 안내(에러가 아니므로 danger 색을 쓰지 않는다) */
-  .field-hint{color:var(--muted);font-size:12.5px;margin-top:6px}
+  .field-hint{color:var(--color-muted);font-size:12.5px;margin-top:6px}
   /* 비밀번호 규칙 체크리스트 — 판정은 서버가 하고 여기는 안내만 한다(U3) */
-  .pw-rules{list-style:disc;margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12.5px}
+  .pw-rules{list-style:disc;margin:6px 0 0;padding-left:18px;color:var(--color-muted);font-size:12.5px}
   .pw-rules li{margin-top:2px}
   /* 필드 에러가 여러 건일 수 있으므로 목록으로 낸다(base의 .field-error 색·크기 유지) */
   .field-error{margin:6px 0 0;padding-left:18px;list-style:disc}
-  .form-foot{margin-top:var(--s-md);text-align:center;font-size:14px;color:var(--muted)}
+  .form-foot{margin-top:var(--s-md);text-align:center;font-size:14px;color:var(--color-muted)}
 </style>
 {% endblock %}
 

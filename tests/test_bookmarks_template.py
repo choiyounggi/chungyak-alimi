@@ -55,6 +55,9 @@ def test_bookmarks_renders_list():
     assert "bookmark-btn is-on" in out    # 북마크 목록이므로 on
     assert 'aria-pressed="true"' in out
     assert "공공 오픈API(청약홈/LH) 기반" in out  # 푸터
+    # 관보 토큰 이관(t4 D4): badge--agency는 --color-paper-3, 구 hardcode hex 제거
+    assert ".badge--agency{" in out and "var(--color-paper-3)" in out
+    assert "#2b5fd9" not in out
 
 
 # ── 정상: 공유 매크로 v2 위계(figure) + t2 소비 계약(data-dday/data-housing) 렌더 스모크(D10) ──
