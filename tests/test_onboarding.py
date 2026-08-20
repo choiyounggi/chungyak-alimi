@@ -204,6 +204,9 @@ def test_get_renders_saved_values_and_step_marker(client):
     assert 'aria-current="step"' in r.text
     # 완료한 이전 스텝으로는 링크로 되돌아갈 수 있다
     assert 'href="/onboarding/1"' in r.text
+    # 관보 토큰 이관(t4 D2): select가 base input과 동일 계약(focus 남록), 구 hardcode hex 제거
+    assert "select:focus{border-color:var(--color-accent)" in r.text
+    assert "#eef4ff" not in r.text
 
 
 def test_step3_get_renders_saved_rows_and_checked_preferences(client):

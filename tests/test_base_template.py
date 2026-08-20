@@ -25,7 +25,12 @@ ICON_IDS = [
 ]
 
 # 브리프 [색상/라운드/간격/폰트] — :root 토큰 정의(선언부, `--name:` 형태로 존재 검증).
+# 관보 에디토리얼(design.md Exports) 신규 토큰 + 구 토큰명(하위호환 별칭) 모두 유지.
 REQUIRED_TOKEN_DEFS = [
+    # 신규(design.md Exports)
+    "--color-paper:", "--color-ink:", "--color-accent:", "--color-signal:",
+    "--font-display:", "--font-body:", "--font-mono:", "--dur-fast:", "--ease-out:",
+    # 구 토큰명 — 페이지 태스크가 이관할 때까지 별칭으로 유지(하위호환)
     "--canvas:", "--surface-soft:", "--surface-card:", "--surface-strong:",
     "--ink:", "--body-strong:", "--body:", "--muted:", "--muted-soft:",
     "--hairline:", "--hairline-soft:",
@@ -72,9 +77,54 @@ def test_base_defines_every_root_token():
     out = _env().get_template("base.html").render()
     for tok in REQUIRED_TOKEN_DEFS:
         assert tok in out, f":root 토큰 선언 누락: {tok}"
-    # 값도 표본 검증(잘못된 값 주입 방지)
-    assert "--canvas:#fffaf0" in out
-    assert "--accent-teal:#1a3a3a" in out
+    # 값도 표본 검증(잘못된 값 주입 방지) — 관보 에디토리얼 토큰(design.md Exports) + 구 별칭
+    assert "--color-paper:oklch(97.5% 0.012 85)" in out
+    assert "--canvas:var(--color-paper)" in out
+    assert "--color-accent:oklch(40% 0.065 195)" in out
+    assert "--accent-teal:var(--color-accent)" in out
+
+
+# ── 정상: 구글 폰트 로딩 계약 — preconnect 2개 + 3개 폰트 패밀리 + display=swap ──
+def test_base_loads_fonts_with_swap():
+    out = _env().get_template("base.html").render()
+    assert 'rel="preconnect" href="https://fonts.googleapis.com"' in out
+    assert 'rel="preconnect" href="https://fonts.gstatic.com" crossorigin' in out
+    assert "family=Hahmlet" in out
+    assert "family=IBM+Plex+Sans+KR" in out
+    assert "family=IBM+Plex+Mono" in out
+    # 에러 케이스: display=swap 이 빠지면 폰트 로딩 중 렌더가 막힌다(FOIT) — 반드시 포함되어야 함
+    assert "display=swap" in out
+
+
+# ── 정상: 모션 축소를 요청한 사용자에게는 전환·애니메이션을 사실상 끈다 ──
+def test_base_respects_reduced_motion():
+    out = _env().get_template("base.html").render()
+    assert "@media (prefers-reduced-motion:reduce)" in out
+    assert "transition-duration:.01ms!important" in out
+    assert "animation:none!important" in out
+
+
+# ── 정상: h1은 --text-xl(26px)로 .display(33px)와 위계가 구분된다(리뷰 r1 F1) ──
+def test_base_h1_uses_text_xl_not_2xl():
+    out = _env().get_template("base.html").render()
+    assert "h1{font-family:var(--font-display);font-size:var(--text-xl)" in out
+    # 모바일은 24px(D3) — .display(모바일 28px)와도 위계가 구분되어야 한다
+    assert "h1{font-size:24px}" in out
+
+
+# ── 정상: --font-mono의 한글 폴백이 Plex Sans KR로 이어져 임의 시스템 폰트로 새지 않는다(리뷰 r1 F2) ──
+def test_base_font_mono_falls_back_to_korean_body_font():
+    out = _env().get_template("base.html").render()
+    assert '--font-mono:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,monospace' in out
+
+
+# ── 경계: 섹션 제목 double rule 아래 여백이 남아 콘텐츠가 붙지 않는다(리뷰 r1 NB1) ──
+def test_base_section_h2_keeps_spacing_below_double_rule():
+    out = _env().get_template("base.html").render()
+    assert (
+        ".section h2{border-bottom:3px double var(--color-rule-strong);"
+        "padding-bottom:10px;margin-bottom:14px}"
+    ) in out
 
 
 # ── 정상: 컴포넌트 클래스 계약 전부(base + modifier) 존재 ──
@@ -82,10 +132,10 @@ def test_base_defines_every_component_selector():
     out = _env().get_template("base.html").render()
     for sel in REQUIRED_SELECTORS:
         assert sel in out, f"컴포넌트 셀렉터 계약 누락: {sel}"
-    # 크림 푸터(다크 아님) — 배경이 surface-soft 토큰
-    assert "background:var(--surface-soft)" in out
-    # 선택된 필터 칩은 teal 채움(클릭 가능 필터를 CTA 버튼과 구분)
-    assert "button.chip.active{background:var(--accent-teal)" in out
+    # 크림 푸터(다크 아님) — 배경이 paper-2 토큰(관보 에디토리얼)
+    assert "background:var(--color-paper-2)" in out
+    # 선택된 필터 칩은 accent 채움(클릭 가능 필터를 CTA 버튼과 구분)
+    assert "button.chip.active{background:var(--color-accent)" in out
     # 고정(읽기 전용) 조건 칩 변형 — 클릭 불가 시각 구분
     assert ".chip--info{" in out
     # 기본 topbar: 브랜드 워드마크
@@ -132,7 +182,7 @@ def test_base_topnav_and_bookmark_toggle_js():
     assert "/bookmarks" in out and "removeChild" in out
     # 북마크 버튼: 카드 우상단 고정(absolute) + 체크 시 아이콘 색 채움(fill)
     assert ".bookmark-btn{position:absolute" in out
-    assert ".bookmark-btn.is-on .ic{fill:var(--accent-teal)}" in out
+    assert ".bookmark-btn.is-on .ic{fill:var(--color-accent)}" in out
     # 카드는 우상단 절대배치의 기준(position:relative)
     assert "position:relative" in out
 

@@ -89,6 +89,8 @@ def test_detail_extends_base_and_renders_full():
     # 섹션 존재
     for s in ("내 청약 판정", "일정", "공급구분별 일정", "주택형별 모집", "위치", "공고 내용", "자격요건"):
         assert s in out, f"섹션 누락: {s}"
+    # 정정공고 배너 프레임: base .section이 테두리를 잃었으므로 좌측 3px 룰로 이관 (D1)
+    assert 'style="border-left:3px solid var(--color-accent);padding-left:14px"' in out
     # 테이블은 base .table 클래스
     assert '<table class="table"' in out
     # 주택형 데이터 포맷 보존
@@ -186,7 +188,7 @@ def test_detail_js_preserved_and_recolored():
     assert "지도에서 위치를 찾지 못했어요" in out
     assert "setBounds" in out
     assert "12000" in out  # 타임아웃 보존
-    # 브랜드 색 교체: teal 리터럴 존재 · carrot 완전 제거
+    # 브랜드 색 교체: teal 리터럴 존재 · carrot 완전 제거 (D5: 카카오 Polygon은 CSS var 불가 — 하드코드 유지)
     assert "#1a3a3a" in out
     assert "#FF6F0F" not in out
     # 주입 안내문 이모지 → SVG use (i-map은 주입부에서만 사용됨)
@@ -197,7 +199,55 @@ def test_detail_js_preserved_and_recolored():
     # 라이트박스 보존
     assert 'id="lightbox"' in out
     assert "lb-prev" in out and "lb-next" in out
-    # 옛 CSS 변수명 잔존 금지 (base 미정의 → 마이그레이션 완료)
-    assert "var(--mut)" not in out
-    assert "var(--sub)" not in out
-    assert "var(--line)" not in out
+    # #map 도판 프레임: 룰 테두리 + paper-3 배경 (D2)
+    assert (
+        "#map{width:100%;height:300px;border:1px solid var(--color-rule);"
+        "border-radius:var(--r-md);margin-bottom:14px;background:var(--color-paper-3)}"
+    ) in out
+    # mapLoadFailed 안내문: 신 토큰 이관 + #fff→paper 토큰 + radius 6px (D1)
+    assert 'color:var(--color-muted);font-size:13.5px">' in out
+    assert '<b style="color:var(--color-body)">지도를 불러오지 못했어요</b>' in out
+    assert (
+        'border:1px solid var(--color-rule);background:var(--color-paper);'
+        'color:var(--color-body);font:inherit;font-size:13px;font-weight:600;'
+        'padding:7px 16px;border-radius:6px;cursor:pointer'
+    ) in out
+    # mapNoLocation 안내문: 신 토큰 이관 (D1)
+    assert '<b style="color:var(--color-body)">지도에서 위치를 찾지 못했어요</b>' in out
+    # 동 단위 근사 안내(note): 신 토큰 이관 (D1)
+    assert "note.style.cssText = 'color:var(--color-muted);font-size:12px;margin:-8px 0 14px'" in out
+    # 라이트박스는 콘텐츠 몰입 레이어 — #fff 리터럴 유지 (D6, 시스템 팔레트 밖 허용)
+    assert "color:#fff" in out
+    # 옛 CSS 변수명·리터럴 잔존 금지 (마이그레이션 완료)
+    assert "var(--muted)" not in out
+    assert "var(--body)" not in out
+    assert "var(--hairline)" not in out
+    assert "var(--surface-strong)" not in out
+    assert "var(--accent-teal)" not in out
+    assert "background:#fff" not in out
+    assert "border-radius:10px" not in out
+
+
+# ── 로컬 <style> 블록 토큰 이관 검증 (D1·D3·D4) — 컨텍스트와 무관하게 항상 렌더됨 ──
+def test_detail_local_style_block_tokens_migrated():
+    out = _render()
+    assert (
+        ".meta{color:var(--color-muted);font-size:13.5px;margin:8px 0 12px;"
+        "display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}"
+    ) in out
+    assert ".sched .k,.kv .k{color:var(--color-muted);font-weight:600}" in out
+    assert ".spec{font-size:12px;font-weight:700;color:var(--color-ok)}" in out
+    assert ".note{color:var(--color-muted);font-size:13px;margin:0 0 10px}" in out
+    assert (
+        "pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--color-body);margin:0}"
+    ) in out
+    assert (
+        ".imgs a{display:block;text-decoration:none;color:var(--color-body);"
+        "font-size:12.5px;font-weight:600;text-align:center}"
+    ) in out
+    # 이미지 도판 프레임: 룰 테두리 + paper-3 배경 (D3)
+    assert (
+        ".imgs img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-md);"
+        "border:1px solid var(--color-rule);background:var(--color-paper-3);margin-bottom:5px}"
+    ) in out
+    assert ".imgs a:hover img{border-color:var(--color-accent)}" in out

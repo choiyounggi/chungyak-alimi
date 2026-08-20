@@ -122,6 +122,9 @@ def test_get_profile_renders_current_values(client):
     assert 'value="newlywed" selected' in r.text        # select 현재 선택값
     # D14: 회원 식별자는 세션에서만 온다 — 폼에 숨김 필드로 두지 않는다.
     assert 'name="member_id"' not in r.text
+    # 관보 토큰 이관(t4 D3): saved 배너는 --color-ok-soft, 구 hardcode hex 제거
+    assert "var(--color-ok-soft)" in r.text
+    assert "#E6F6EE" not in r.text
 
 
 # ── ② 정상: POST 로 전 섹션 저장 → 재조회 반영 ────────────────────────────

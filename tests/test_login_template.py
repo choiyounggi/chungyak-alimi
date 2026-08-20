@@ -38,8 +38,8 @@ def _render(name: str, ctx: dict) -> str:
 def test_login_renders_without_errors():
     out = _render("login.html", {"error": None, "email": ""})
 
-    # base 상속 증거: base <style> 토큰 + 스프라이트 + main.wrap 존재
-    assert "--canvas:#fffaf0" in out, "base <style> 미렌더(상속 실패)"
+    # base 상속 증거: base <style> 토큰(관보 에디토리얼 별칭) + 스프라이트 + main.wrap 존재
+    assert "--canvas:var(--color-paper)" in out, "base <style> 미렌더(상속 실패)"
     assert 'id="i-alert"' in out, "base SVG 스프라이트 미포함(상속 실패)"
     assert 'class="wrap"' in out, "base main.wrap 미포함(content 블록 위치)"
 
