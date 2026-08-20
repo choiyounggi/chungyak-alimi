@@ -3,20 +3,20 @@
 
 {% block head %}
 <style>
-  .meta{color:var(--muted);font-size:13.5px;margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+  .meta{color:var(--color-muted);font-size:13.5px;margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
   .badges{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 18px}
   .section h2{display:flex;align-items:center;gap:8px;margin-bottom:14px}
   .sched,.kv{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;font-size:13.5px}
-  .sched .k,.kv .k{color:var(--muted);font-weight:600}
-  .spec{font-size:12px;font-weight:700;color:var(--ok)}
-  .note{color:var(--muted);font-size:13px;margin:0 0 10px}
-  pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--body);margin:0}
+  .sched .k,.kv .k{color:var(--color-muted);font-weight:600}
+  .spec{font-size:12px;font-weight:700;color:var(--color-ok)}
+  .note{color:var(--color-muted);font-size:13px;margin:0 0 10px}
+  pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--color-body);margin:0}
   .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
-  .imgs a{display:block;text-decoration:none;color:var(--body);font-size:12.5px;font-weight:600;text-align:center}
-  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--hairline);background:var(--surface-strong);margin-bottom:5px}
-  .imgs a:hover img{border-color:var(--accent-teal)}
+  .imgs a{display:block;text-decoration:none;color:var(--color-body);font-size:12.5px;font-weight:600;text-align:center}
+  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--color-rule);background:var(--color-paper-3);margin-bottom:5px}
+  .imgs a:hover img{border-color:var(--color-accent)}
   .srcs{display:flex;flex-wrap:wrap;gap:8px}
-  #map{width:100%;height:300px;border-radius:var(--r-md);margin-bottom:14px;background:var(--surface-strong)}
+  #map{width:100%;height:300px;border:1px solid var(--color-rule);border-radius:var(--r-md);margin-bottom:14px;background:var(--color-paper-3)}
   #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;
     display:flex;align-items:center;justify-content:center}
   #lightbox[hidden]{display:none}
@@ -52,7 +52,7 @@
   {% endif %}
 
   {% if superseded_by %}
-  <section class="section" style="border-color:var(--accent-teal)">
+  <section class="section" style="border-left:3px solid var(--color-accent);padding-left:14px">
     <b><svg class="ic"><use href="#i-alert"></use></svg> 정정공고로 대체된 공고입니다.</b>
     <a href="/notice/{{ superseded_by }}">최신 정정공고 보기 <svg class="ic"><use href="#i-arrow-right"></use></svg></a>
   </section>
@@ -256,11 +256,11 @@
     var el = document.getElementById('map');
     if (!el || el.dataset.ready === '1') return;
     el.innerHTML =
-      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:13.5px">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--color-muted);font-size:13.5px">' +
       '<svg class="ic" style="width:28px;height:28px"><use href="#i-map"></use></svg>' +
-      '<b style="color:var(--body)">지도를 불러오지 못했어요</b>' +
+      '<b style="color:var(--color-body)">지도를 불러오지 못했어요</b>' +
       '<span>카카오 지도 서버 연결이 원활하지 않아요. 잠시 후 새로고침 해주세요.</span>' +
-      '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--hairline);background:#fff;color:var(--body);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:10px;cursor:pointer">새로고침</button>' +
+      '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--color-rule);background:var(--color-paper);color:var(--color-body);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:6px;cursor:pointer">새로고침</button>' +
       '</div>';
   }
 
@@ -313,7 +313,7 @@
       if (approx) {
         var note = document.createElement('div');
         note.textContent = '※ 신규 택지라 정확한 지점을 찾지 못해 동 단위 대략 위치예요.';
-        note.style.cssText = 'color:var(--muted);font-size:12px;margin:-8px 0 14px';
+        note.style.cssText = 'color:var(--color-muted);font-size:12px;margin:-8px 0 14px';
         document.getElementById('map').insertAdjacentElement('afterend', note);
       }
     }
@@ -321,9 +321,9 @@
       if (polygonCoords && polygonCoords.length) return;  // 폴리곤으로 이미 표시됨
       var el = document.getElementById('map');
       el.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;color:var(--muted);font-size:13.5px">' +
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;color:var(--color-muted);font-size:13.5px">' +
         '<svg class="ic" style="width:26px;height:26px"><use href="#i-pin"></use></svg>' +
-        '<b style="color:var(--body)">지도에서 위치를 찾지 못했어요</b>' +
+        '<b style="color:var(--color-body)">지도에서 위치를 찾지 못했어요</b>' +
         '<span>신규 택지 주소라 좌표 검색이 안 돼요 — 아래 주소를 참고해주세요.</span>' +
         '</div>';
     }
