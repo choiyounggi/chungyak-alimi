@@ -55,8 +55,12 @@ def test_bookmarks_renders_list():
     assert "bookmark-btn is-on" in out    # 북마크 목록이므로 on
     assert 'aria-pressed="true"' in out
     assert "공공 오픈API(청약홈/LH) 기반" in out  # 푸터
-    # 관보 토큰 이관(t4 D4): badge--agency는 --color-paper-3, 구 hardcode hex 제거
-    assert ".badge--agency{" in out and "var(--color-paper-3)" in out
+    # v2 토큰 이관(D8): badge--agency는 --color-surface-2, 구 관보 별칭·hardcode hex 제거.
+    # base.html도 자체 <style>에서 --color-paper-3 별칭을 여전히 쓰므로(out of scope),
+    # 이 페이지가 block head로 주입한 마지막 <style> 블록만 대상으로 검증한다.
+    style_block = re.findall(r"<style>(.*?)</style>", out, re.S)[-1]
+    assert ".badge--agency{" in style_block and "var(--color-surface-2)" in style_block
+    assert "var(--color-paper-3)" not in style_block
     assert "#2b5fd9" not in out
 
 

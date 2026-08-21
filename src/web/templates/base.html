@@ -6,29 +6,38 @@
 <title>{% block title %}청약 알리미{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;700&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/variable/woff2/SUIT-Variable.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
-  /* Hallmark · genre: editorial · design-system: design.md · designed-as-app · theme: 관보-custom (paper oklch(97.5% .012 85) · accent oklch(40% .065 195) · Hahmlet + IBM Plex Sans KR) */
+  /* Hallmark · genre: product-map-v2 · design-system: design.md · designed-as-app · theme: 프롭테크-지도-관제 (canvas oklch(97.5% .004 262) · accent oklch(48% .19 262) · SUIT Variable + IBM Plex Mono) */
   :root{
-    /* 색상 — 관보 에디토리얼 (design.md Exports) */
-    --color-paper:oklch(97.5% 0.012 85); --color-paper-2:oklch(95% 0.014 85);
-    --color-paper-3:oklch(92% 0.014 85);
-    --color-ink:oklch(22% 0.012 70); --color-body:oklch(32% 0.010 70);
-    --color-muted:oklch(48% 0.008 70); --color-faint:oklch(62% 0.006 70);
-    --color-rule:oklch(84% 0.010 85); --color-rule-strong:oklch(30% 0.012 70);
-    --color-accent:oklch(40% 0.065 195); --color-accent-soft:oklch(93% 0.02 195);
-    --color-signal:oklch(55% 0.19 35); --color-signal-soft:oklch(95% 0.03 35);
-    --color-warn:oklch(62% 0.13 75); --color-ok:oklch(55% 0.10 165);
-    --color-ok-soft:oklch(94% 0.04 165);
-    --color-focus:oklch(40% 0.065 195);
-    /* 폰트 */
-    --font-display:"Hahmlet","Apple SD Gothic Neo",serif;
-    --font-body:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo",sans-serif;
-    --font-mono:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,monospace;
-    --text-sm:13px; --text-base:15.5px; --text-md:17px;
-    --text-lg:21px; --text-xl:26px; --text-2xl:33px;
+    /* 색상 — v2(design.md Exports). 단일 앵커 hue 262(코발트), 전 토큰 OKLCH */
+    --color-canvas:oklch(97.5% 0.004 262);
+    --color-surface:oklch(99.4% 0.002 262);
+    --color-surface-2:oklch(95.5% 0.006 262);
+    --color-ink:oklch(21% 0.02 262); --color-body:oklch(32% 0.015 262);
+    --color-muted:oklch(48% 0.012 262); --color-faint:oklch(63% 0.01 262);
+    --color-line:oklch(90% 0.006 262); --color-line-strong:oklch(80% 0.01 262);
+    --color-accent:oklch(48% 0.19 262); --color-accent-strong:oklch(42% 0.2 262);
+    --color-accent-soft:oklch(94% 0.03 262);
+    --color-signal:oklch(55% 0.19 25); --color-signal-soft:oklch(95% 0.03 25);
+    --color-warn:oklch(62% 0.13 75); --color-warn-soft:oklch(95% 0.05 75);
+    --color-ok:oklch(55% 0.11 165); --color-ok-soft:oklch(94% 0.05 165);
+    --color-focus:var(--color-accent);
+    /* 폰트 — Display/Body 단일 패밀리(SUIT Variable) + 극단 웨이트 대비. 수치는 Plex Mono */
+    --font-display:"SUIT Variable","Apple SD Gothic Neo",sans-serif;
+    --font-body:"SUIT Variable",-apple-system,"Apple SD Gothic Neo",sans-serif;
+    --font-mono:"IBM Plex Mono","SUIT Variable",ui-monospace,monospace;
+    --text-xs:12px; --text-sm:13px; --text-base:14.5px; --text-md:16px;
+    --text-lg:19px; --text-xl:24px; --text-2xl:32px;
     /* 라운드 */
-    --r-xs:3px; --r-sm:4px; --r-md:6px; --r-lg:8px; --r-pill:9999px;
+    --r-xs:4px; --r-sm:6px; --r-md:10px; --r-lg:14px; --r-pill:9999px;
+    /* 그림자 (쿨 틴트 저투명, 2단) */
+    --shadow-1:0 1px 2px oklch(20% 0.02 262 / 0.06);
+    --shadow-2:0 6px 20px oklch(20% 0.02 262 / 0.10);
+    /* 레이아웃 폭 */
+    --w-page:1080px;
     /* 간격 */
     --s-xxs:4px; --s-xs:8px; --s-sm:12px; --s-md:16px; --s-lg:24px;
     --s-xl:32px; --s-xxl:48px;
@@ -39,15 +48,20 @@
     /* 상단바 높이 — JS가 실측해 갱신(sticky 필터/지도 오프셋 계산용), 미로드 시 이 값 사용 */
     --topbar-h:60px;
 
+    /* 관보 토큰 → v2 별칭(값 자체가 v2를 가리키므로 미마이그레이션 페이지도 자동으로 v2 색을 입는다) */
+    --color-paper:var(--color-canvas); --color-paper-2:var(--color-surface-2);
+    --color-paper-3:oklch(93% 0.008 262);
+    --color-rule:var(--color-line); --color-rule-strong:var(--color-line-strong);
+
     /* 구 토큰 별칭 — 페이지 태스크가 이관할 때까지 유지 */
     --canvas:var(--color-paper); --surface-soft:var(--color-paper-2);
     --surface-card:var(--color-paper-2); --surface-strong:var(--color-paper-3);
     --ink:var(--color-ink); --body-strong:var(--color-ink); --body:var(--color-body);
     --muted:var(--color-muted); --muted-soft:var(--color-faint);
     --hairline:var(--color-rule); --hairline-soft:var(--color-rule);
-    --primary:var(--color-ink); --primary-active:var(--color-body);
-    --primary-disabled:var(--color-rule); --on-primary:var(--color-paper);
-    --accent-teal:var(--color-accent); --on-teal:var(--color-paper);
+    --primary:var(--color-accent); --primary-active:var(--color-accent-strong);
+    --primary-disabled:var(--color-rule); --on-primary:var(--color-surface);
+    --accent-teal:var(--color-accent); --on-teal:var(--color-surface);
     --accent-peach:var(--color-signal-soft); --accent-peach-soft:var(--color-paper-2);
     --ok:var(--color-ok); --warn:var(--color-warn); --danger:var(--color-signal);
     --font-sans:var(--font-body);
@@ -57,34 +71,43 @@
   /* 타이포 트리트먼트 */
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font-body);color:var(--color-body);background:var(--color-paper);
-    font-size:var(--text-base);line-height:1.65;-webkit-font-smoothing:antialiased}
-  h1{font-family:var(--font-display);font-size:var(--text-xl);font-weight:700;letter-spacing:-.02em;
+    font-size:var(--text-base);line-height:1.6;-webkit-font-smoothing:antialiased}
+  h1{font-family:var(--font-display);font-size:var(--text-xl);font-weight:800;letter-spacing:-.02em;
     color:var(--color-ink);line-height:1.2;margin:0}
-  h2{font-family:var(--font-display);font-size:var(--text-lg);font-weight:600;letter-spacing:-.02em;
+  h2{font-family:var(--font-display);font-size:var(--text-lg);font-weight:800;letter-spacing:-.02em;
     color:var(--color-ink);margin:0}
-  .display{font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;letter-spacing:-.02em}
+  .display{font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800;letter-spacing:-.02em}
   b,strong{color:var(--color-ink);font-weight:700}
   .muted{color:var(--color-muted)}
   .sub{color:var(--color-muted);font-size:var(--text-sm)}
 
-  /* 상단바 · 브랜드 · 내비 — 제호 + double rule (관보 제호 관습) */
+  /* 상단바 · 브랜드 · 검색 · 내비 — 다방식 1행 상단바(full-width, surface, 1px 하단 보더, sticky) */
   .topbar{position:sticky;top:0;z-index:100;
-    background:var(--color-paper);border-bottom:3px double var(--color-rule-strong);color:var(--color-ink)}
-  .topbar .inner{max-width:840px;margin:0 auto;padding:16px 20px;
-    display:flex;align-items:center;justify-content:space-between;gap:16px}
+    background:var(--color-surface);border-bottom:1px solid var(--color-line);color:var(--color-ink)}
+  .topbar .inner{max-width:none;margin:0;padding:12px 20px;
+    display:flex;align-items:center;gap:20px}
   .topbar a{color:var(--color-ink);text-decoration:none}
-  .brand{font-family:var(--font-display);color:var(--color-ink);font-weight:700;letter-spacing:-.02em;font-size:20px}
-  .topnav{display:flex;gap:4px;flex:none}
-  .topnav a{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:700;
-    color:var(--color-muted);padding:6px 2px;border-radius:0}
-  .topnav a:hover{text-decoration:underline;text-underline-offset:3px;color:var(--color-ink)}
+  .brand{font-family:var(--font-display);color:var(--color-accent);font-weight:800;letter-spacing:-.02em;font-size:20px;flex:none}
+  .search-bar{display:flex;align-items:center;gap:8px;flex:1;max-width:520px;
+    height:42px;padding:0 14px;background:var(--color-surface);border:1px solid var(--color-line);
+    border-radius:var(--r-md);transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out)}
+  .search-bar:focus-within{border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-soft)}
+  .search-bar .ic{width:18px;height:18px;color:var(--color-muted);flex-shrink:0}
+  .search-bar input{border:0;background:none;outline:none;flex:1;font-family:inherit;
+    font-size:var(--text-base);color:var(--color-ink)}
+  .search-bar input::placeholder{color:var(--color-faint)}
+  .topnav{display:flex;gap:4px;flex:none;margin-left:auto}
+  .topnav a{display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:600;
+    color:var(--color-muted);padding:6px 10px;border-radius:var(--r-pill)}
+  .topnav a:hover{color:var(--color-ink);background:var(--color-surface-2)}
   .topnav .ic{width:16px;height:16px}
   /* 로그아웃 POST 폼: 링크와 같은 모양이지만 동작은 button (상태 변경) */
   .topnav .nav-form{display:flex;margin:0}
   .topnav .nav-btn{border:none;background:none;cursor:pointer;font-family:inherit;
-    display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:700;
-    color:var(--color-muted);padding:6px 2px;border-radius:0}
-  .topnav .nav-btn:hover{text-decoration:underline;text-underline-offset:3px;color:var(--color-ink)}
+    display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:600;
+    color:var(--color-muted);padding:6px 10px;border-radius:var(--r-pill)}
+  .topnav .nav-btn:hover{color:var(--color-ink);background:var(--color-surface-2)}
+  .topbar-actions{display:flex;align-items:center;gap:8px;flex:none}
 
   /* 카드 내부 공용 레이아웃(대시보드·북마크 페이지 공유) */
   .head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-right:34px}
@@ -94,7 +117,7 @@
   .type-tag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--color-body)}
   .type-tag i{width:8px;height:8px;border-radius:50%;background:var(--color-accent);display:inline-block}
   .type-tag--muted i{background:var(--color-faint)}
-  /* 핵심 수치(D-day) — 관보 수치는 Plex Mono(tabular-nums). 마감 임박도(closing→signal, warn→warn), 예정(pre)은 뮤트 */
+  /* 핵심 수치(D-day) — Plex Mono(tabular-nums). 마감 임박도(closing→signal, warn→warn), 예정(pre)은 뮤트 */
   .figure{font-family:var(--font-mono);font-variant-numeric:tabular-nums;
     font-size:18px;font-weight:700;color:var(--color-ink);letter-spacing:-.02em;margin:8px 0 4px}
   .figure--pre{color:var(--color-faint)}
@@ -116,31 +139,34 @@
   .bookmark-btn.is-on .ic{fill:var(--color-accent)}
 
   /* 컨테이너 */
-  .wrap{max-width:840px;margin:0 auto;padding:22px 20px 72px}
+  .wrap{max-width:var(--w-page);margin:0 auto;padding:22px 20px 72px}
 
-  /* 버튼 — CTA voice: primary 도장(ink 채움), secondary 테두리만 */
+  /* 버튼 — primary는 액센트 채움(hover는 accent-strong), secondary는 surface+1px line */
   .btn{border-radius:var(--r-md);height:44px;padding:12px 20px;font-weight:700;font-size:14px;
     display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;
-    border:none;font-family:inherit;text-decoration:none}
-  .btn-primary{background:var(--color-ink);color:var(--color-paper)}
-  .btn-primary:hover{background:var(--color-body)}
-  .btn-secondary{background:transparent;color:var(--color-ink);border:1px solid var(--color-ink)}
-  .btn-secondary:hover{background:var(--color-paper-2)}
+    border:none;font-family:inherit;text-decoration:none;
+    transition:background-color var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out)}
+  .btn-primary{background:var(--color-accent);color:var(--color-surface)}
+  .btn-primary:hover{background:var(--color-accent-strong)}
+  .btn-secondary{background:var(--color-surface);color:var(--color-ink);border:1px solid var(--color-line)}
+  .btn-secondary:hover{background:var(--color-surface-2)}
+  .btn-sm{height:36px;padding:8px 14px;font-size:13px}
 
-  /* 카드 · 섹션 — 지면 행(ledger row): 상자·그림자·hover lift 폐지, 하단 헤어라인 룰 + hover 배경 스왑 */
-  .card{background:transparent;border:0;border-bottom:1px solid var(--color-rule);border-radius:0;
-    padding:16px 4px;margin:0;position:relative;transition:background-color var(--dur-fast) var(--ease-out)}
-  .card:hover{background:var(--color-paper-2);box-shadow:none}
-  .section{border:0;background:transparent;padding:18px 0}
-  /* 섹션 제목 아래 double rule — 관보 제호 관습 */
-  .section h2{border-bottom:3px double var(--color-rule-strong);padding-bottom:10px;margin-bottom:14px}
+  /* 카드 · 섹션 — 박스 복귀: surface + 1px line + radius + hover 시 보더 강조 + shadow-2 */
+  .card{background:var(--color-surface);border:1px solid var(--color-line);border-radius:var(--r-lg);
+    padding:18px 20px;margin:0 0 12px;position:relative;
+    transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out)}
+  .card:hover{border-color:var(--color-line-strong);box-shadow:var(--shadow-2)}
+  .section{border:0;background:transparent;padding:20px 0}
+  /* 섹션 제목 — double rule 폐기, 여백만으로 위계 유지 */
+  .section h2{margin-bottom:14px}
 
   /* 뱃지 (D-day 변형) */
   .badge{display:inline-block;font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill);white-space:nowrap}
-  .badge--soon{background:var(--color-signal);color:var(--color-paper)}
-  .badge--mid{background:var(--color-warn);color:var(--color-paper)}
-  .badge--far{color:var(--color-ok);background:var(--color-ok-soft)}
-  .badge--pre{color:var(--color-accent);background:var(--color-accent-soft)}
+  .badge--soon{background:var(--color-signal);color:var(--color-surface)}
+  .badge--mid{background:var(--color-warn-soft);color:var(--color-warn)}
+  .badge--far{background:var(--color-ok-soft);color:var(--color-ok)}
+  .badge--pre{background:var(--color-accent-soft);color:var(--color-accent)}
 
   /* 지역 태그 */
   .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--color-accent);background:var(--color-accent-soft);
@@ -167,16 +193,19 @@
   .table{width:100%;border-collapse:collapse}
   .table th,.table td{padding:9px 8px;border-bottom:1px solid var(--color-rule);text-align:right;white-space:nowrap}
   .table th:first-child,.table td:first-child{text-align:left}
-  .table th{color:var(--color-muted);font-size:12.5px;font-weight:700}
+  .table th{color:var(--color-muted);font-size:12.5px;font-weight:700;background:var(--color-surface-2)}
+  .table td{font-variant-numeric:tabular-nums}
   /* 넓은 테이블은 모바일에서 가로 스크롤(줄바꿈/화면깨짐 방지) */
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 
-  /* 폼 — 좁은 단 서식 리듬: 1px 룰 테두리 + focus 남록 */
+  /* 폼 — focus 시 accent 보더 + 3px accent-soft 링 */
   label{display:block;font-size:13px;font-weight:700;color:var(--color-body);margin:0 0 6px}
-  input{width:100%;padding:13px 14px;border:1px solid var(--color-rule);border-radius:var(--r-md);
+  input{width:100%;height:46px;padding:0 14px;border:1px solid var(--color-rule);border-radius:var(--r-md);
     font-size:15px;background:var(--color-paper);color:var(--color-ink);outline:none;font-family:inherit}
-  input:focus{border-color:var(--color-accent)}
+  input:focus{border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-soft)}
   input.invalid{border-color:var(--color-signal)}
+  /* 텍스트류 입력 전용 규칙(46px 높이 등)이 checkbox/radio까지 키우지 않도록 예외(리뷰 r1 F1) */
+  input[type="checkbox"],input[type="radio"]{width:auto;height:auto;padding:0}
   .field{margin-bottom:16px}
   .field-error{display:none;color:var(--color-signal);font-size:12.5px;font-weight:600;margin-top:6px}
   .field.has-error .field-error{display:block}
@@ -192,9 +221,9 @@
   .pw-toggle:focus-visible{outline:1px solid var(--color-ink)}
   .pw-toggle .ic{width:20px;height:20px}
 
-  /* 온보딩 미완성 배너 — 차단이 아니라 유도(O5). 좌측 accent 룰로 강조 */
+  /* 온보딩 미완성 배너 — 차단이 아니라 유도. accent-soft 배경 + 좌측 accent 룰로 강조 */
   .onboarding-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
-    gap:8px 16px;background:var(--accent-peach-soft);border-radius:var(--r-md);border-left:3px solid var(--color-accent);
+    gap:8px 16px;background:var(--color-accent-soft);border-radius:var(--r-md);border-left:3px solid var(--color-accent);
     padding:12px 14px;margin-bottom:var(--s-md);font-size:13.5px;color:var(--color-ink)}
   .onboarding-banner a{display:inline-flex;align-items:center;gap:5px;
     color:var(--color-ink);font-weight:700;text-decoration:none;white-space:nowrap}
@@ -224,13 +253,19 @@
   /* 이미지가 컨테이너를 넘지 않도록 */
   img{max-width:100%}
 
+  /* ── 반응형: ≤720px — 헤더 랩, 검색창이 2행 전체 폭 ── */
+  @media (max-width:720px){
+    .topbar .inner{flex-wrap:wrap}
+    .search-bar{order:3;flex-basis:100%;max-width:none}
+  }
+
   /* ── 반응형: 모바일(≤640px) — 줄바꿈/화면깨짐 방지 ── */
   @media (max-width:640px){
     .topbar .inner{padding:14px 16px}
     .wrap{padding:18px 16px 60px}
-    h1{font-size:24px}
+    h1{font-size:22px}
     .display{font-size:28px}
-    .card{padding:14px 4px}
+    .card{padding:14px 16px}
     .section{padding:14px 0}
     .table th,.table td{padding:8px 7px;font-size:12px}
     .footer{padding:32px 16px}
@@ -273,8 +308,12 @@
   {% block topbar %}
   <header class="topbar"><div class="inner">
     <a class="brand" href="/">청약 알리미</a>
+    <form class="search-bar" role="search" onsubmit="return false">
+      <svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg>
+      <input type="search" placeholder="지역·공고명·아파트명 검색" aria-label="공고 검색">
+    </form>
     <nav class="topnav">
-      <a href="/">전체</a>
+      <a href="/"><svg class="ic"><use href="#i-map"></use></svg> 지도</a>
       <a href="/bookmarks"><svg class="ic"><use href="#i-bookmark"></use></svg> 북마크</a>
       {# request 없이 직접 렌더하는 템플릿 테스트에서도 안전하도록 request 존재를 먼저 확인 #}
       {% if request and request.session.get('member_id') %}
@@ -283,11 +322,14 @@
       <form method="post" action="/logout" class="nav-form">
         <button type="submit" class="nav-btn">로그아웃</button>
       </form>
-      {% else %}
-      <a href="/login">로그인</a>
-      <a href="/register">회원가입</a>
-      {% endif %}
+      {% else %}{# 로그인/회원가입은 .topbar-actions로 이동 #}{% endif %}
     </nav>
+    <div class="topbar-actions">
+      {% if not (request and request.session.get('member_id')) %}
+      <a class="btn btn-secondary btn-sm" href="/login">로그인</a>
+      <a class="btn btn-primary btn-sm" href="/register">회원가입</a>
+      {% endif %}
+    </div>
   </div></header>
   {% endblock %}
 

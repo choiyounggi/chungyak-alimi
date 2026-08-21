@@ -474,7 +474,7 @@ def test_filters_sticky_below_topbar_with_opaque_background():
     rule = m.group(0)
     assert "position:sticky" in rule
     assert "top:var(--topbar-h" in rule
-    assert "background:var(--color-paper)" in rule
+    assert "background:var(--color-surface)" in rule
 
 
 # ── 에러: 필터 z-index가 topbar(100)보다 낮아야 한다(topbar를 가리면 안 됨, 위계 역전 방지) ──
@@ -504,3 +504,134 @@ def test_fixed_fallbacks_when_no_region_type():
     # 폴백은 고정(chip--info)으로만, 클릭 가능한 area/secd 버튼은 없어야 함
     assert 'data-ftype="area"' not in out
     assert 'data-ftype="secd"' not in out
+
+
+def _style_block(out: str) -> str:
+    # base.html도 자체 <style> 블록을 갖고 있으므로(head에서 index보다 먼저 닫힘),
+    # index.html의 페이지 로컬 블록은 항상 마지막 <style> 태그다.
+    blocks = re.findall(r"<style>(.*?)</style>", out, re.S)
+    assert blocks, "<style> 블록을 찾을 수 없음"
+    return blocks[-1]
+
+
+def _rule(out: str, selector_pattern: str) -> str:
+    # index.html 페이지 로컬 <style> 블록으로 한정해 base.html의 동명 선택자(.wrap 등)와
+    # 섞이지 않게 한다. 그 안에서도 데스크톱 기본 선언이 @media(max-width:900px) 모바일
+    # 오버라이드보다 먼저 오므로(D1), 첫 매치가 곧 데스크톱 규칙이다.
+    style = _style_block(out)
+    m = re.search(selector_pattern + r"\{[^}]*\}", style)
+    assert m, f"{selector_pattern} 규칙 파싱 실패(index.html 로컬 스타일 블록 내)"
+    return m.group(0)
+
+
+# ── D1(정상): 목록 좌 400px + 지도 우 flex — DOM은 지도가 먼저이므로 order로 반전 ──
+def test_map_layout_desktop_400px_list_left_map_right():
+    out = _render([_item()], kakao_key="TESTKEY")
+    layout = _rule(out, r"\.map-layout")
+    assert "grid-template-columns:400px 1fr" in layout
+    map_rule = _rule(out, r"#chungyak-map")
+    assert "order:2" in map_rule
+    list_rule = _rule(out, r"\.list-panel")
+    assert "order:1" in list_rule
+
+
+# ── D1(경계): 모바일(≤900px)은 order를 되돌려 DOM 순서(지도 먼저) 그대로 세로 스택 ──
+def test_map_layout_mobile_resets_order_to_dom_sequence():
+    out = _render([_item()], kakao_key="TESTKEY")
+    m = re.search(r"@media \(max-width:900px\)\{(.*?)\n  \}", out, re.S)
+    assert m, "모바일 미디어쿼리를 찾을 수 없음"
+    body = m.group(1)
+    assert "grid-template-columns:1fr" in body
+    assert "order:0" in body
+
+
+# ── D1(정상): 지도 높이/배경/보더가 v2 새 토큰으로 이관됨 ──
+def test_map_container_uses_v2_tokens_and_height_formula():
+    out = _render([_item()], kakao_key="TESTKEY")
+    map_rule = _rule(out, r"#chungyak-map")
+    assert "height:calc(100vh - var(--topbar-h, 60px) - 96px)" in map_rule
+    assert "background:var(--color-surface-2)" in map_rule
+    assert "border:1px solid var(--color-line)" in map_rule
+    assert "border-radius:var(--r-lg)" in map_rule
+    # 옛 별칭 토큰은 이 규칙에 더 이상 없어야 함
+    assert "--color-paper" not in map_rule
+    assert "--color-rule" not in map_rule
+
+
+# ── D3(정상): 필터 서브바가 단일 가로 행(overflow-x 스크롤)으로 재구성됨 ──
+def test_filters_single_row_with_horizontal_scroll():
+    out = _render([_item()])
+    filters_rule = _rule(out, r"\.filters")
+    assert "flex-direction:row" in filters_rule
+    assert "align-items:center" in filters_rule
+    assert "overflow-x:auto" in filters_rule
+
+
+# ── D3(정상): 필터 그룹 사이 1px 세로 디바이더 ──
+def test_filter_group_divider_between_groups():
+    out = _render([_item()])
+    divider = _rule(out, r"\.filter-group \+ \.filter-group")
+    assert "border-left:1px solid var(--color-line)" in divider
+    assert "padding-left:14px" in divider
+
+
+# ── D3(경계): 칩 목록은 줄바꿈 없이 한 줄로 이어져 가로 스크롤 컨테이너 안에서만 넘친다 ──
+def test_chips_nowrap_inside_scrollable_row():
+    out = _render([_item()])
+    chips_rule = _rule(out, r"\.chips")
+    assert "flex-wrap:nowrap" in chips_rule
+
+
+# ── D2(정상): 지도 워크스페이스는 base .wrap(1080px)을 전폭으로 오버라이드 ──
+def test_wrap_overridden_to_full_width_workspace():
+    out = _render([_item()])
+    wrap_rule = _rule(out, r"\.wrap")
+    assert "max-width:none" in wrap_rule
+    assert "padding:16px 20px 40px" in wrap_rule
+
+
+# ── D5(정상): 목록 헤더 h1은 base 기본(--text-xl)보다 작은 --text-lg로 축소된 컴팩트 헤더 ──
+def test_head_h1_uses_compact_text_lg():
+    out = _render([_item()])
+    head_h1_rule = _rule(out, r"\.head h1")
+    assert "font-size:var(--text-lg)" in head_h1_rule
+
+
+# ── D9(정상): 액티브 카드는 배경뿐 아니라 보더 색으로도 accent를 강조한다 ──
+def test_card_active_adds_accent_border():
+    out = _render([_item()])
+    active_rule = _rule(out, r"\.card--active")
+    assert "background:var(--color-accent-soft)" in active_rule
+    assert "border-color:var(--color-accent)" in active_rule
+
+
+# ── D7(정상): 기관 배지 배경이 v2 --color-surface-2로 이관됨(bookmarks.html과 동일 규칙) ──
+def test_agency_badge_uses_v2_surface_2_background():
+    out = _render([_item()])
+    badge_rule = _rule(out, r"\.badge--agency")
+    assert "background:var(--color-surface-2)" in badge_rule
+    assert "color:var(--color-body)" in badge_rule
+    assert "border-radius:var(--r-sm)" in badge_rule
+
+
+# ── D6/D4(정상): 마커(.mk) 스타일이 v2 토큰으로 이관되되, JS 로직(스크립트 블록)은 무수정 ──
+def test_marker_style_tokens_migrated_but_scripts_untouched():
+    out = _render([_item()], kakao_key="TESTKEY")
+    style = _style_block(out)
+    # 스타일 블록 안에서는 옛 별칭 토큰이 전부 사라져야 함(D6 이관 대상)
+    assert "var(--color-paper)" not in style
+    assert "var(--color-paper-2)" not in style
+    assert "var(--color-paper-3)" not in style
+    assert "var(--color-rule)" not in style
+    assert "var(--font-sans)" not in style
+    # 새 토큰으로 대체
+    assert "font-family:var(--font-body)" in style
+    mk_type_rule = _rule(out, r"\.mk__type")
+    assert "color:var(--color-surface)" in mk_type_rule
+    mk_figure_rule = _rule(out, r"\.mk__figure")
+    assert "background:var(--color-surface)" in mk_figure_rule
+    assert "color:var(--color-ink)" in mk_figure_rule
+    # D4: 마커 JS 로직(dday 4분기·emphasize·CustomOverlay)은 그대로 — 기존 계약 테스트가 이미 커버.
+    # 여기서는 스크립트 블록 자체가 스타일 이관과 무관하게 살아있는지만 재확인한다.
+    assert "function createMarkerEl(card)" in out
+    assert "CustomOverlay" in out

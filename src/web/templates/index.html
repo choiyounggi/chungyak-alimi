@@ -3,44 +3,49 @@
 
 {% block head %}
 <style>
-  /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base 토큰 참조 */
-  /* 지도+리스트 2단을 위해 이 페이지만 컨테이너를 넓게(base .wrap=840px 오버라이드) */
-  .wrap{max-width:1280px}
+  /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base v2 토큰 참조 */
+  /* 지도 워크스페이스는 base .wrap(--w-page:1080px)을 전폭으로 오버라이드한다 */
+  .wrap{max-width:none;padding:16px 20px 40px}
   .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
-  /* 지도(좌) + 리스트(우) 2단 grid */
-  .map-layout{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start}
+  .head h1{font-size:var(--text-lg)}
+  /* 목록(좌 400px) + 지도(우 flex) 2단 grid. DOM은 지도가 먼저이므로 order로 시각 순서만 반전 */
+  .map-layout{display:grid;grid-template-columns:400px 1fr;gap:16px;align-items:start}
   .map-layout--nomap{display:block}
-  #chungyak-map{width:100%;height:calc(100vh - 150px);min-height:420px;position:sticky;
-    top:calc(var(--topbar-h, 60px) + 16px);
-    border-radius:var(--r-lg);border:1px solid var(--color-rule);background:var(--color-paper-3)}
-  .list-panel{min-width:0}                 /* grid 자식 overflow 방지 */
+  #chungyak-map{width:100%;height:calc(100vh - var(--topbar-h, 60px) - 96px);min-height:420px;position:sticky;
+    top:calc(var(--topbar-h, 60px) + 16px);order:2;
+    border-radius:var(--r-lg);border:1px solid var(--color-line);background:var(--color-surface-2)}
+  .list-panel{min-width:0;order:1}          /* grid 자식 overflow 방지 + 시각 순서상 좌측 */
   .list-panel--full{min-width:0}
-  .card--active{background:var(--color-accent-soft)}
-  /* 모바일(≤900px): 지도 상단 고정높이 → 리스트 세로 스택 */
+  .card--active{background:var(--color-accent-soft);border-color:var(--color-accent)}
+  /* 모바일(≤900px): 지도 상단 고정높이 → 리스트 세로 스택(DOM 순서 그대로: 지도 먼저) */
   @media (max-width:900px){
     .map-layout{grid-template-columns:1fr}
-    #chungyak-map{position:static;height:52vh;min-height:300px}
+    #chungyak-map{position:static;height:52vh;min-height:300px;order:0}
+    .list-panel{order:0}
   }
   .count{color:var(--color-accent);font-weight:700}
   /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리. topbar 바로 아래 고정되어
-     목록 스크롤 중에도 노출(topbar보다 낮은 z-index, 불투명 배경으로 본문 겹침 방지) */
-  .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px;
-    position:sticky;top:var(--topbar-h, 60px);z-index:90;background:var(--color-paper);
-    padding:8px 0;border-bottom:1px solid var(--color-rule)}
-  .filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+     목록 스크롤 중에도 노출(topbar보다 낮은 z-index, 불투명 배경으로 본문 겹침 방지).
+     단일 가로 행 + 자체 스크롤 컨테이너(그룹 사이 디바이더로 시각 구분) */
+  .filters{display:flex;flex-direction:row;align-items:center;gap:14px;margin:16px 0 22px;
+    overflow-x:auto;white-space:nowrap;
+    position:sticky;top:var(--topbar-h, 60px);z-index:90;background:var(--color-surface);
+    padding:8px 0;border-bottom:1px solid var(--color-line)}
+  .filter-group{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;flex:none}
+  .filter-group + .filter-group{border-left:1px solid var(--color-line);padding-left:14px}
   .filter-label{font-size:12px;font-weight:700;color:var(--color-muted);flex:none;margin-right:2px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chips{display:flex;flex-wrap:nowrap;gap:8px}
   /* 카드 기관 배지(_macros.html 공용 매크로) — bookmarks.html에도 같은 규칙 존재 */
   .badge--agency{display:inline-block;padding:1px 7px;border-radius:var(--r-sm);
-    font-size:11px;font-weight:600;background:var(--color-paper-3);color:var(--color-body);margin-right:6px}
+    font-size:11px;font-weight:600;background:var(--color-surface-2);color:var(--color-body);margin-right:6px}
   /* .head-row/.head-actions/a.title/.row 카드 스타일은 base.html에 공용 정의됨 */
-  /* 지도 마커(.mk): 2단 pill 오버레이 — design-spec §1, 기존 토큰만 사용 */
+  /* 지도 마커(.mk): 2단 pill 오버레이 — design-spec §1, v2 토큰만 사용 */
   .mk{--band:var(--color-accent);display:inline-flex;flex-direction:column;cursor:pointer;
       border-radius:var(--r-md) var(--r-md) var(--r-md) 0;border:1px solid color-mix(in srgb,var(--band) 80%,#000);
       box-shadow:1px 2px 4px rgba(0,0,0,.16);background:var(--band);overflow:hidden;
-      font-family:var(--font-sans);line-height:1}
-  .mk__type{color:var(--color-paper);font-size:11px;font-weight:700;padding:4px 8px 3px;letter-spacing:-.01em}
-  .mk__figure{background:var(--color-paper);color:var(--color-ink);font-size:12.5px;font-weight:700;
+      font-family:var(--font-body);line-height:1}
+  .mk__type{color:var(--color-surface);font-size:11px;font-weight:700;padding:4px 8px 3px;letter-spacing:-.01em}
+  .mk__figure{background:var(--color-surface);color:var(--color-ink);font-size:12.5px;font-weight:700;
       padding:4px 8px;border-radius:0 0 5px 0;white-space:nowrap;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
   .mk--selected{border-color:var(--color-ink);z-index:10}
   .mk--closing .mk__figure{color:var(--color-signal)}   /* 마감 D-3 이내 */

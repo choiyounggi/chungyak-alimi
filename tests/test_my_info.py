@@ -182,6 +182,14 @@ def test_get_profile_shows_account_section_and_email(client):
     assert 'name="current_password"' in r.text
     assert 'name="new_password"' in r.text
     assert 'name="new_password2"' in r.text
+    # 섹션 카드화(t4 D3): base 의 테두리 없는 .section 을 이 페이지에서만 카드로 재정의
+    assert (
+        ".section{background:var(--color-surface);border:1px solid var(--color-line);"
+        "border-radius:var(--r-lg);box-shadow:var(--shadow-1);" in r.text
+    )
+    # select 토큰 이관 — 새 이름(--color-line/--color-canvas)만 참조
+    assert "border:1px solid var(--color-line);border-radius:var(--r-md);" in r.text
+    assert "background:var(--color-canvas);color:var(--color-ink);" in r.text
 
 
 # ── topnav: 로그인 상태 대시보드 응답에 '내정보' 링크 노출 ────────────────────
