@@ -466,25 +466,54 @@ def test_matches_type_handles_agency():
     assert "chungyakChipMatch" in out or "window.chungyakApplyList" in out
 
 
-# ── 정상: 필터 영역이 topbar 바로 아래(--topbar-h)에 sticky로 고정되고 불투명 배경을 가진다 ──
-def test_filters_sticky_below_topbar_with_opaque_background():
+# ── 정상: 상단 블록(.page-top=제목 줄+필터)이 topbar 바로 아래(--topbar-h)에 sticky로 고정되고
+#    불투명 배경·하단 보더를 소유한다(t1-sticky-gap D1) ──
+def test_page_top_sticky_below_topbar_with_opaque_background():
     out = _render([_item()])
-    m = re.search(r"\.filters\{[^}]*\}", out)
-    assert m, ".filters 규칙 파싱 실패"
-    rule = m.group(0)
+    rule = re.search(r"\.page-top\{[^}]*\}", _css_no_comments(out))
+    assert rule, ".page-top 규칙 파싱 실패"
+    rule = rule.group(0)
     assert "position:sticky" in rule
     assert "top:var(--topbar-h" in rule
     assert "background:var(--color-surface)" in rule
+    assert "border-bottom:1px solid var(--color-line)" in rule
 
 
-# ── 에러: 필터 z-index가 topbar(100)보다 낮아야 한다(topbar를 가리면 안 됨, 위계 역전 방지) ──
-def test_filters_z_index_stays_below_topbar():
+# ── 정상: sticky·오프셋·z-index는 래퍼(.page-top)로 이관 — .filters 자체에는 남아 있지 않다(D1).
+#    남아 있으면 이중 sticky로 오프셋 계산이 어긋난다 ──
+def test_filters_rule_no_longer_sticky():
     out = _render([_item()])
-    m = re.search(r"\.filters\{[^}]*z-index:(\d+)", out)
-    assert m, ".filters z-index 선언 파싱 실패"
-    filters_z = int(m.group(1))
-    assert filters_z == 90
-    assert filters_z < 100, f".filters z-index({filters_z})가 topbar(100) 이상 — topbar를 가릴 수 있음"
+    m = re.search(r"\.filters\{[^}]*\}", _css_no_comments(out))
+    assert m, ".filters 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "position:sticky" not in rule
+    assert "top:var(--topbar-h" not in rule
+    assert "z-index" not in rule
+
+
+# ── 정상: 렌더 결과에서 .page-top이 .head와 .filters를 모두 감싼다(마크업 배선, D1) ──
+def test_page_top_wraps_head_and_filters():
+    # 경계까지 한 번에: 목록 있음 / 빈 목록 / 지도 없음(kakao_key="") 모두 같은 구조
+    for items, key in ([_item()], "TESTKEY"), ([], "TESTKEY"), ([_item()], ""):
+        out = _render(items, kakao_key=key)
+        assert out.count('<div class="page-top">') == 1, f"(items={len(items)},key={key!r})"
+        i_pt = out.index('<div class="page-top">')
+        i_head = out.index('<div class="head">')
+        i_filters = out.index('<div class="filters">')
+        i_layout = out.index('<div class="map-layout')
+        assert i_pt < i_head < i_filters < i_layout, (
+            f".page-top이 head/filters를 감싸는 순서가 아님(items={len(items)},key={key!r})"
+        )
+
+
+# ── 에러: 상단 블록 z-index가 topbar(100)보다 낮아야 한다(topbar를 가리면 안 됨, 위계 역전 방지) ──
+def test_page_top_z_index_stays_below_topbar():
+    out = _render([_item()])
+    m = re.search(r"\.page-top\{[^}]*z-index:(\d+)", _css_no_comments(out))
+    assert m, ".page-top z-index 선언 파싱 실패"
+    z = int(m.group(1))
+    assert z == 90
+    assert z < 100, f".page-top z-index({z})가 topbar(100) 이상 — topbar를 가릴 수 있음"
 
 
 # ── 경계값: #chungyak-map 오프셋 계산은 CSS 텍스트라 kakao_key 유무와 무관하게 항상 동일 ──
@@ -512,6 +541,12 @@ def _style_block(out: str) -> str:
     blocks = re.findall(r"<style>(.*?)</style>", out, re.S)
     assert blocks, "<style> 블록을 찾을 수 없음"
     return blocks[-1]
+
+
+def _css_no_comments(out: str) -> str:
+    # 배선 단정은 주석 제거 후 텍스트를 대상으로 한다 — 한국어 의도 주석이 선택자/선언과
+    # 같은 토큰(position:static, top:auto 등)을 언급해도 오탐하지 않게.
+    return re.sub(r"/\*.*?\*/", "", _style_block(out), flags=re.S)
 
 
 def _rule(out: str, selector_pattern: str) -> str:
@@ -543,6 +578,20 @@ def test_map_layout_mobile_resets_order_to_dom_sequence():
     body = m.group(1)
     assert "grid-template-columns:1fr" in body
     assert "order:0" in body
+
+
+# ── 회귀(t1-sticky-gap): 모바일 #chungyak-map은 position:static과 top:auto를 함께 선언해야 한다.
+#    Kakao SDK가 컨테이너에 인라인 position:relative를 심어 static을 이기므로, 데스크톱 규칙의
+#    top:calc(...)를 top:auto로 리셋하지 않으면 지도가 그만큼 밀려 초기 공백(실측 217px)이 생긴다 ──
+def test_map_mobile_rule_resets_desktop_top_offset():
+    out = _render([_item()], kakao_key="TESTKEY")
+    m = re.search(r"@media \(max-width:900px\)\{(.*?)\n  \}", _css_no_comments(out), re.S)
+    assert m, "모바일 미디어쿼리를 찾을 수 없음(주석 제거 텍스트)"
+    map_rule = re.search(r"#chungyak-map\{[^}]*\}", m.group(1))
+    assert map_rule, "모바일 #chungyak-map 규칙 파싱 실패"
+    map_rule = map_rule.group(0)
+    assert "position:static" in map_rule
+    assert "top:auto" in map_rule
 
 
 # ── D1(정상): 지도 높이/배경/보더가 v2 새 토큰으로 이관됨 ──

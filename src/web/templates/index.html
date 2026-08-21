@@ -6,7 +6,13 @@
   /* 페이지 로컬 레이아웃 헬퍼(디자인 시스템 컴포넌트 아님) — 전부 base v2 토큰 참조 */
   /* 지도 워크스페이스는 base .wrap(--w-page:1080px)을 전폭으로 오버라이드한다 */
   .wrap{max-width:none;padding:16px 20px 40px}
-  .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  /* 상단 고정 블록: 제목 줄(.head)+필터(.filters)를 하나의 sticky 래퍼로 묶어 topbar 바로 아래 고정.
+     sticky 요소의 margin 영역은 배경이 칠해지지 않아 본문이 비쳐 보이므로, 블록 내부 간격은
+     padding으로 소유하고 아래 본문과의 간격(22px)만 래퍼 밖 margin-bottom으로 둔다.
+     (topbar(z100)보다 낮은 z-index, 불투명 배경으로 본문 겹침 방지) */
+  .page-top{position:sticky;top:var(--topbar-h, 60px);z-index:90;background:var(--color-surface);
+    border-bottom:1px solid var(--color-line);padding:6px 0 0;margin-bottom:22px}
+  .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 4px}
   .head h1{font-size:var(--text-lg)}
   /* 목록(좌 400px) + 지도(우 flex) 2단 grid. DOM은 지도가 먼저이므로 order로 시각 순서만 반전 */
   .map-layout{display:grid;grid-template-columns:400px 1fr;gap:16px;align-items:start}
@@ -17,20 +23,20 @@
   .list-panel{min-width:0;order:1}          /* grid 자식 overflow 방지 + 시각 순서상 좌측 */
   .list-panel--full{min-width:0}
   .card--active{background:var(--color-accent-soft);border-color:var(--color-accent)}
-  /* 모바일(≤900px): 지도 상단 고정높이 → 리스트 세로 스택(DOM 순서 그대로: 지도 먼저) */
+  /* 모바일(≤900px): 지도 상단 고정높이 → 리스트 세로 스택(DOM 순서 그대로: 지도 먼저)
+     top:auto 필수 — Kakao SDK가 컨테이너에 인라인 position:relative를 심어 author position:static을
+     이기므로, 데스크톱 규칙의 top:calc(...)를 리셋하지 않으면 지도가 그만큼 아래로 밀려 공백이 생긴다 */
   @media (max-width:900px){
     .map-layout{grid-template-columns:1fr}
-    #chungyak-map{position:static;height:52vh;min-height:300px;order:0}
+    #chungyak-map{position:static;top:auto;height:52vh;min-height:300px;order:0}
     .list-panel{order:0}
   }
   .count{color:var(--color-accent);font-weight:700}
-  /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리. topbar 바로 아래 고정되어
-     목록 스크롤 중에도 노출(topbar보다 낮은 z-index, 불투명 배경으로 본문 겹침 방지).
-     단일 가로 행 + 자체 스크롤 컨테이너(그룹 사이 디바이더로 시각 구분) */
-  .filters{display:flex;flex-direction:row;align-items:center;gap:14px;margin:16px 0 22px;
-    overflow-x:auto;white-space:nowrap;
-    position:sticky;top:var(--topbar-h, 60px);z-index:90;background:var(--color-surface);
-    padding:8px 0;border-bottom:1px solid var(--color-line)}
+  /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리. 고정(sticky)·배경·하단 보더는
+     래퍼(.page-top)가 소유하고, 여기는 단일 가로 행 + 자체 스크롤 컨테이너만 담당
+     (그룹 사이 디바이더로 시각 구분) */
+  .filters{display:flex;flex-direction:row;align-items:center;gap:14px;margin:16px 0 0;
+    overflow-x:auto;white-space:nowrap;padding:8px 0}
   .filter-group{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;flex:none}
   .filter-group + .filter-group{border-left:1px solid var(--color-line);padding-left:14px}
   .filter-label{font-size:12px;font-weight:700;color:var(--color-muted);flex:none;margin-right:2px}
@@ -55,6 +61,8 @@
 
 {% block content %}
   {% from "_macros.html" import notice_card %}
+  {# 상단 고정 블록 — 제목 줄+필터를 함께 sticky로 고정(.page-top 스타일 계약 참조) #}
+  <div class="page-top">
   <div class="head">
     <h1>내 관심 청약</h1>
     <span class="sub">{{ today }} 기준 · <span class="count">{{ items|length }}</span>건</span>
@@ -113,6 +121,7 @@
       </div>
     </div>
   </div>
+  </div>{# /.page-top #}
 
   {# 리스트 패널(카드 목록) — 지도 유무와 무관하게 동일 마크업을 한 번만 정의 #}
   {% macro list_panel(extra_class="") %}
