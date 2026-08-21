@@ -16,7 +16,7 @@ TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "web" / "templates"
 BASE = TEMPLATES / "base.html"
 
 # 브리프 [SVG 아이콘 스프라이트] — 다운스트림이 참조하는 id 전부.
-# i-eye / i-eye-off 는 비밀번호 마스킹 토글용(Task 04).
+# i-eye / i-eye-off 는 비밀번호 마스킹 토글용. 22개 유지(v2에서 추가/삭제 없음 — D8).
 ICON_IDS = [
     "i-pin", "i-calendar", "i-won", "i-home", "i-award", "i-doc", "i-clip",
     "i-image", "i-map", "i-search", "i-target", "i-arrow-left", "i-arrow-right",
@@ -25,19 +25,29 @@ ICON_IDS = [
 ]
 
 # 브리프 [색상/라운드/간격/폰트] — :root 토큰 정의(선언부, `--name:` 형태로 존재 검증).
-# 관보 에디토리얼(design.md Exports) 신규 토큰 + 구 토큰명(하위호환 별칭) 모두 유지.
+# v2(design.md Exports) 신규 토큰 + 구 토큰명(하위호환 별칭) 모두 유지(D8).
 REQUIRED_TOKEN_DEFS = [
-    # 신규(design.md Exports)
-    "--color-paper:", "--color-ink:", "--color-accent:", "--color-signal:",
-    "--font-display:", "--font-body:", "--font-mono:", "--dur-fast:", "--ease-out:",
-    # 구 토큰명 — 페이지 태스크가 이관할 때까지 별칭으로 유지(하위호환)
+    # 신규(v2 design.md Exports)
+    "--color-canvas:", "--color-surface:", "--color-surface-2:",
+    "--color-ink:", "--color-body:", "--color-muted:", "--color-faint:",
+    "--color-line:", "--color-line-strong:",
+    "--color-accent:", "--color-accent-strong:", "--color-accent-soft:",
+    "--color-signal:", "--color-signal-soft:", "--color-warn:", "--color-warn-soft:",
+    "--color-ok:", "--color-ok-soft:", "--color-focus:",
+    "--font-display:", "--font-body:", "--font-mono:",
+    "--text-xs:", "--text-sm:", "--text-base:", "--text-md:", "--text-lg:", "--text-xl:", "--text-2xl:",
+    "--r-xs:", "--r-sm:", "--r-md:", "--r-lg:", "--r-pill:",
+    "--shadow-1:", "--shadow-2:", "--w-page:", "--dur-fast:", "--ease-out:",
+    # 구 토큰명 — 페이지 태스크가 이관할 때까지 별칭으로 유지(하위호환, D8)
+    "--color-paper:", "--color-paper-2:", "--color-paper-3:",
+    "--color-rule:", "--color-rule-strong:",
     "--canvas:", "--surface-soft:", "--surface-card:", "--surface-strong:",
     "--ink:", "--body-strong:", "--body:", "--muted:", "--muted-soft:",
     "--hairline:", "--hairline-soft:",
     "--primary:", "--primary-active:", "--primary-disabled:", "--on-primary:",
     "--accent-teal:", "--on-teal:", "--accent-peach:", "--accent-peach-soft:",
     "--ok:", "--warn:", "--danger:",
-    "--r-xs:", "--r-sm:", "--r-md:", "--r-lg:", "--r-xl:", "--r-pill:",
+    "--r-xl:",
     "--s-xxs:", "--s-xs:", "--s-sm:", "--s-md:", "--s-lg:", "--s-xl:",
     "--s-xxl:", "--s-section:", "--font-sans:",
 ]
@@ -46,7 +56,8 @@ REQUIRED_TOKEN_DEFS = [
 # base(기본) 클래스와 변형(modifier)을 모두 명시적으로 검증한다.
 REQUIRED_SELECTORS = [
     ".topbar", ".topbar .inner", ".topbar a", ".brand", ".wrap", ".toast", ".toast.is-on",
-    ".btn", ".btn-primary", ".btn-secondary",
+    ".search-bar", ".topbar-actions",
+    ".btn", ".btn-primary", ".btn-secondary", ".btn-sm",
     ".card", ".section",
     ".badge", ".badge--soon", ".badge--mid", ".badge--far", ".badge--pre",
     ".tag",
@@ -65,6 +76,23 @@ REQUIRED_SELECTORS = [
 REQUIRED_BLOCKS = ["title", "head", "topbar", "content", "footer", "scripts"]
 
 
+class _FakeSession:
+    """request.session.get(key, default) 만 흉내내는 최소 스텁."""
+
+    def __init__(self, member_id: str | None = None) -> None:
+        self._member_id = member_id
+
+    def get(self, key: str, default=None):
+        if key == "member_id":
+            return self._member_id
+        return default
+
+
+class _FakeRequest:
+    def __init__(self, member_id: str | None = None) -> None:
+        self.session = _FakeSession(member_id)
+
+
 def _env(child: str | None = None) -> jinja2.Environment:
     loaders: list[jinja2.BaseLoader] = [jinja2.FileSystemLoader(str(TEMPLATES))]
     if child is not None:
@@ -77,23 +105,29 @@ def test_base_defines_every_root_token():
     out = _env().get_template("base.html").render()
     for tok in REQUIRED_TOKEN_DEFS:
         assert tok in out, f":root 토큰 선언 누락: {tok}"
-    # 값도 표본 검증(잘못된 값 주입 방지) — 관보 에디토리얼 토큰(design.md Exports) + 구 별칭
-    assert "--color-paper:oklch(97.5% 0.012 85)" in out
-    assert "--canvas:var(--color-paper)" in out
-    assert "--color-accent:oklch(40% 0.065 195)" in out
+    # 값도 표본 검증(잘못된 값 주입 방지) — v2 토큰(design.md Exports, D2) + 구 별칭(D8)
+    assert "--color-canvas:oklch(97.5% 0.004 262)" in out
+    assert "--color-paper:var(--color-canvas)" in out
+    assert "--color-accent:oklch(48% 0.19 262)" in out
     assert "--accent-teal:var(--color-accent)" in out
+    # 구 페이지 버튼도 액센트 CTA가 되도록 --primary가 accent를 가리킨다
+    assert "--primary:var(--color-accent)" in out
+    assert "--w-page:1080px" in out
 
 
-# ── 정상: 구글 폰트 로딩 계약 — preconnect 2개 + 3개 폰트 패밀리 + display=swap ──
+# ── 정상: 폰트 로딩 계약 — SUIT Variable(jsDelivr) + IBM Plex Mono(Google Fonts) ──
 def test_base_loads_fonts_with_swap():
     out = _env().get_template("base.html").render()
     assert 'rel="preconnect" href="https://fonts.googleapis.com"' in out
     assert 'rel="preconnect" href="https://fonts.gstatic.com" crossorigin' in out
-    assert "family=Hahmlet" in out
-    assert "family=IBM+Plex+Sans+KR" in out
+    assert 'rel="preconnect" href="https://cdn.jsdelivr.net"' in out
+    assert "cdn.jsdelivr.net/gh/sun-typeface/SUIT@2" in out
     assert "family=IBM+Plex+Mono" in out
     # 에러 케이스: display=swap 이 빠지면 폰트 로딩 중 렌더가 막힌다(FOIT) — 반드시 포함되어야 함
     assert "display=swap" in out
+    # 기각된 구 폰트(Hahmlet·IBM Plex Sans KR)는 더 이상 로드하지 않는다(D3)
+    assert "family=Hahmlet" not in out
+    assert "family=IBM+Plex+Sans+KR" not in out
 
 
 # ── 정상: 모션 축소를 요청한 사용자에게는 전환·애니메이션을 사실상 끈다 ──
@@ -104,46 +138,72 @@ def test_base_respects_reduced_motion():
     assert "animation:none!important" in out
 
 
-# ── 정상: h1은 --text-xl(26px)로 .display(33px)와 위계가 구분된다(리뷰 r1 F1) ──
-def test_base_h1_uses_text_xl_not_2xl():
+# ── 정상: h1은 --text-xl(24px)·극단 웨이트(800)로 .display(32px)와 위계가 구분된다(D3) ──
+def test_base_h1_uses_new_scale_and_extreme_weight():
     out = _env().get_template("base.html").render()
-    assert "h1{font-family:var(--font-display);font-size:var(--text-xl)" in out
-    # 모바일은 24px(D3) — .display(모바일 28px)와도 위계가 구분되어야 한다
-    assert "h1{font-size:24px}" in out
+    assert "h1{font-family:var(--font-display);font-size:var(--text-xl);font-weight:800" in out
+    # 모바일은 22px(D3 컴포넌트 변환표) — .display(모바일 28px)와도 위계가 구분되어야 한다
+    assert "h1{font-size:22px}" in out
 
 
-# ── 정상: --font-mono의 한글 폴백이 Plex Sans KR로 이어져 임의 시스템 폰트로 새지 않는다(리뷰 r1 F2) ──
-def test_base_font_mono_falls_back_to_korean_body_font():
+# ── 정상: --font-mono의 한글 폴백이 SUIT Variable로 이어져 임의 시스템 폰트로 새지 않는다 ──
+def test_base_font_mono_falls_back_to_suit_variable():
     out = _env().get_template("base.html").render()
-    assert '--font-mono:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,monospace' in out
+    assert '--font-mono:"IBM Plex Mono","SUIT Variable",ui-monospace,monospace' in out
 
 
-# ── 경계: 섹션 제목 double rule 아래 여백이 남아 콘텐츠가 붙지 않는다(리뷰 r1 NB1) ──
-def test_base_section_h2_keeps_spacing_below_double_rule():
+# ── 경계: 섹션 제목 double rule이 폐기되고 margin-bottom만으로 여백을 유지한다(D6) ──
+def test_base_section_h2_drops_double_rule_keeps_spacing():
     out = _env().get_template("base.html").render()
-    assert (
-        ".section h2{border-bottom:3px double var(--color-rule-strong);"
-        "padding-bottom:10px;margin-bottom:14px}"
-    ) in out
+    assert ".section h2{margin-bottom:14px}" in out
+    assert "3px double" not in out
 
 
-# ── 정상: 컴포넌트 클래스 계약 전부(base + modifier) 존재 ──
+# ── 정상: 컴포넌트 클래스 계약 전부(base + modifier + v2 신규) 존재 ──
 def test_base_defines_every_component_selector():
     out = _env().get_template("base.html").render()
     for sel in REQUIRED_SELECTORS:
         assert sel in out, f"컴포넌트 셀렉터 계약 누락: {sel}"
-    # 크림 푸터(다크 아님) — 배경이 paper-2 토큰(관보 에디토리얼)
+    # 푸터 — 배경이 paper-2 별칭(→ v2 surface-2)을 그대로 참조
     assert "background:var(--color-paper-2)" in out
-    # 선택된 필터 칩은 accent 채움(클릭 가능 필터를 CTA 버튼과 구분)
+    # 선택된 필터 칩은 accent 채움(클릭 가능 필터를 CTA 버튼과 구분, D8)
     assert "button.chip.active{background:var(--color-accent)" in out
     # 고정(읽기 전용) 조건 칩 변형 — 클릭 불가 시각 구분
     assert ".chip--info{" in out
     # 기본 topbar: 브랜드 워드마크
     assert 'class="brand"' in out
     assert "청약 알리미" in out
+    # 마감 임박도 배지(D11) — soon은 채움, mid는 soft+텍스트로 전환(구 채움 배지 폐기)
+    assert "badge--mid{background:var(--color-warn-soft);color:var(--color-warn)}" in out
+    assert "badge--far{background:var(--color-ok-soft);color:var(--color-ok)}" in out
 
 
-# ── 정상: 아이콘 스프라이트 18개 id 전부 존재 + 각 symbol이 라인 스타일 계약 준수 ──
+# ── 정상: 카드가 헤어라인 룰 대신 박스(surface+line+radius+hover shadow)로 복귀한다(D6) ──
+def test_base_card_is_bordered_box_with_hover_shadow():
+    out = _env().get_template("base.html").render()
+    m = re.search(r"\.card\{[^}]*\}", out)
+    assert m, ".card 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "background:var(--color-surface)" in rule
+    assert "border:1px solid var(--color-line)" in rule
+    assert "border-radius:var(--r-lg)" in rule
+    assert "position:relative" in rule
+    hover_m = re.search(r"\.card:hover\{[^}]*\}", out)
+    assert hover_m, ".card:hover 규칙 파싱 실패"
+    assert "var(--shadow-2)" in hover_m.group(0)
+
+
+# ── 정상: 온보딩 배너는 accent-soft 배경 + accent 좌측 보더로 유도 톤을 유지한다(컴포넌트 변환표) ──
+def test_base_onboarding_banner_uses_accent_soft():
+    out = _env().get_template("base.html").render()
+    m = re.search(r"\.onboarding-banner\{[^}]*\}", out)
+    assert m, ".onboarding-banner 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "background:var(--color-accent-soft)" in rule
+    assert "border-left:3px solid var(--color-accent)" in rule
+
+
+# ── 정상: 아이콘 스프라이트 22개 id 전부 존재 + 각 symbol이 라인 스타일 계약 준수 ──
 @pytest.mark.parametrize("icon_id", ICON_IDS)
 def test_base_defines_every_icon_symbol(icon_id):
     out = _env().get_template("base.html").render()
@@ -158,20 +218,21 @@ def test_base_defines_every_icon_symbol(icon_id):
     assert 'stroke-width="1.8"' in tag, f"{icon_id}: stroke-width 1.8 아님"
 
 
-# ── 정상: symbol 정확히 21개(누락·초과 방지) ──
+# ── 정상: symbol 정확히 22개(누락·초과 방지, D8 — 검색은 기존 #i-search 재사용) ──
 def test_base_has_exactly_22_symbols():
     out = _env().get_template("base.html").render()
     symbols = re.findall(r'<symbol\b', out)
     assert len(symbols) == len(ICON_IDS) == 22, f"symbol 개수 불일치: {len(symbols)}"
 
 
-# ── 정상: 상단 내비(전체/북마크) + 북마크 토글 JS 계약 ──
+# ── 정상: 상단 내비("지도"/북마크) + 북마크 토글 JS 계약 ──
 def test_base_topnav_and_bookmark_toggle_js():
     out = _env().get_template("base.html").render()
-    # 상단 내비: 전체 / 북마크(아이콘 포함)
+    # 상단 내비: 지도 / 북마크(아이콘 포함) — "전체"는 "지도"로 개편(D4/design_spec)
     assert 'class="topnav"' in out
     assert 'href="/bookmarks"' in out
-    assert "전체" in out and "북마크" in out
+    assert "지도" in out and "북마크" in out
+    assert 'href="#i-map"' in out
     assert 'href="#i-bookmark"' in out
     # 북마크 토글 JS: .bookmark-btn 클릭 → /bookmark/ PUT|DELETE + aria-pressed 토글
     assert "bookmark-btn" in out
@@ -185,6 +246,83 @@ def test_base_topnav_and_bookmark_toggle_js():
     assert ".bookmark-btn.is-on .ic{fill:var(--color-accent)}" in out
     # 카드는 우상단 절대배치의 기준(position:relative)
     assert "position:relative" in out
+
+
+# ── 정상: 다방식 검색창은 디자인만 — role=search·aria-label·onsubmit 억제, 기능 없음(D5) ──
+def test_base_search_bar_is_design_only_no_js():
+    out = _env().get_template("base.html").render()
+    assert 'class="search-bar"' in out
+    assert 'role="search"' in out
+    assert 'onsubmit="return false"' in out
+    assert 'type="search"' in out
+    assert 'aria-label="공고 검색"' in out
+    assert "지역·공고명·아파트명 검색" in out
+    assert 'href="#i-search"' in out
+    # 비활성화 상태 금지(접근성·심미 저해) — disabled 속성이 검색 input에 붙지 않는다
+    m = re.search(r"<input[^>]*type=\"search\"[^>]*>", out)
+    assert m, "검색 input 파싱 실패"
+    assert "disabled" not in m.group(0)
+
+
+# ── 회귀(리뷰 r1 F1): 텍스트 입력의 height:46px가 checkbox/radio까지 키우지 않는다 ──
+def test_base_checkbox_and_radio_are_exempt_from_text_input_height():
+    """onboarding_3.html/_macros.html check() 매크로의 checkbox가 46px로 기형화되는 회귀 방지."""
+    out = _env().get_template("base.html").render()
+    assert 'input[type="checkbox"],input[type="radio"]{width:auto;height:auto;padding:0}' in out
+
+
+# ── 정상: 검색 pill의 flex/폭·포커스 링 계약(D5) ──
+def test_base_search_bar_layout_and_focus_ring():
+    out = _env().get_template("base.html").render()
+    m = re.search(r"\.search-bar\{[^}]*\}", out)
+    assert m, ".search-bar 규칙 파싱 실패"
+    rule = m.group(0)
+    assert "flex:1" in rule
+    assert "max-width:520px" in rule
+    focus_m = re.search(r"\.search-bar:focus-within\{[^}]*\}", out)
+    assert focus_m, ".search-bar:focus-within 규칙 파싱 실패"
+    assert "border-color:var(--color-accent)" in focus_m.group(0)
+    assert "box-shadow:0 0 0 3px var(--color-accent-soft)" in focus_m.group(0)
+
+
+# ── 회귀(리뷰 r1 F2): 와이드 뷰포트에서 내비·계정 액션이 헤더 우측에 붙는다(데드 스페이스 방지) ──
+def test_base_topnav_pushes_actions_flush_right():
+    out = _env().get_template("base.html").render()
+    m = re.search(r"\.topnav\{[^}]*\}", out)
+    assert m, ".topnav 규칙 파싱 실패"
+    assert "margin-left:auto" in m.group(0)
+
+
+# ── 정상: 비로그인 상태 — 로그인/회원가입은 topbar-actions로 이동(topnav 아님), 내정보/로그아웃 없음 ──
+def test_base_topbar_shows_login_register_in_actions_when_anonymous():
+    out = _env(None).get_template("base.html").render(request=_FakeRequest(member_id=None))
+    idx_topnav_close = out.index("</nav>")
+    idx_login = out.index('href="/login"')
+    idx_register = out.index('href="/register"')
+    assert idx_login > idx_topnav_close, "로그인 링크가 topnav 안에 남아 있음(topbar-actions로 이동해야 함)"
+    assert idx_register > idx_topnav_close
+    assert 'btn btn-secondary btn-sm' in out
+    assert 'btn btn-primary btn-sm' in out
+    assert 'href="/profile"' not in out
+    assert 'action="/logout"' not in out
+
+
+# ── 정상: 로그인 상태 — topnav에 내정보/로그아웃, topbar-actions는 비어 있음 ──
+def test_base_topbar_shows_profile_and_logout_when_authenticated():
+    out = _env(None).get_template("base.html").render(request=_FakeRequest(member_id="m1"))
+    assert 'href="/profile"' in out
+    assert 'action="/logout"' in out
+    assert "로그아웃" in out
+    assert 'href="/login"' not in out
+    assert 'href="/register"' not in out
+
+
+# ── 경계값: request 없이 렌더해도(가드 미통과) 익명 분기로 안전하게 떨어진다 ──
+def test_base_topbar_request_guard_defaults_to_anonymous_without_request():
+    out = _env().get_template("base.html").render()
+    assert 'href="/login"' in out
+    assert 'href="/register"' in out
+    assert 'href="/profile"' not in out
 
 
 # ── 실패 가시화: 북마크 요청이 실패하면 사용자에게 보여야 한다 ──
@@ -266,7 +404,7 @@ def test_child_can_override_blocks():
     assert 'id="i-pin"' in out
 
 
-# ── 정상: topbar가 sticky로 상단에 고정되고 불투명 배경으로 본문 겹침을 막는다 ──
+# ── 정상: topbar가 sticky로 상단에 고정되고 불투명 배경(surface)으로 본문 겹침을 막는다(D4/D13) ──
 def test_base_topbar_is_sticky_with_opaque_background():
     out = _env().get_template("base.html").render()
     m = re.search(r"\.topbar\{[^}]*\}", out)
@@ -274,7 +412,8 @@ def test_base_topbar_is_sticky_with_opaque_background():
     rule = m.group(0)
     assert "position:sticky" in rule
     assert "top:0" in rule
-    assert "background:var(--color-paper)" in rule
+    assert "background:var(--color-surface)" in rule
+    assert "border-bottom:1px solid var(--color-line)" in rule
 
 
 # ── 정상: --topbar-h 레이아웃 변수가 fallback 값으로 선언되고, JS가 실측해 갱신한다 ──
@@ -307,6 +446,19 @@ def test_base_topbar_height_sync_noop_when_topbar_absent():
     out = _env(child).get_template("_child.html").render()
     assert 'class="marker"' in out  # 렌더는 예외 없이 끝까지 진행됨
     assert "if (!topbar) return;" in out  # 가드 존재(부재 시 조용히 종료)
+
+
+# ── 경계값: ≤720px에서 헤더가 랩되고 검색창이 2행 전체 폭을 차지한다(D12) ──
+def test_base_header_wraps_search_to_second_row_at_720():
+    out = _env().get_template("base.html").render()
+    assert "@media (max-width:720px){" in out
+    start = out.index("@media (max-width:720px){")
+    end = out.index("@media (max-width:640px)")
+    assert start < end, "≤720px 블록은 ≤640px 블록보다 앞에 있어야 함"
+    block = out[start:end]
+    assert "flex-wrap:wrap" in block
+    assert "order:3" in block
+    assert "flex-basis:100%" in block
 
 
 # ── error-case (DoD): base.html 소스에 이모지 0개 ──

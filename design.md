@@ -1,94 +1,174 @@
-# Design — 청약 알리미 · 관보(官報) 에디토리얼
+# Design — 청약 알리미 · 맵 프로덕트 v2
 
 이 앱의 잠긴 디자인 시스템. 모든 페이지 리스타일링은 코드를 내보내기 전에 이 파일을
 읽는다. 페이지마다 재생성하지 말 것 — 시스템이 자라야 하면 이 파일을 먼저 수정한다.
-(hallmark redesign 다중 페이지 플로우 · 2026-08-20 · run: design-restyle)
+(t1-system · 2026-08-21 · run: designv2 · v1 "관보 에디토리얼" 전면 폐기)
 
-컨셉: **관보/공문서의 종이 질감을 가진 한국형 에디토리얼**. 청약 공고라는 콘텐츠 자체가
-관보(官報)다 — UI가 그 성격을 입는다. 카드 상자 더미가 아니라 헤어라인 룰과 타이포로
-위계를 세운 지면(紙面). 화려한 모션 대신 인쇄물의 확신.
+컨셉: **한국 프롭테크 지도 관제**의 유틸리테리언-테크니컬 톤. 데이터 밀도 높은 지도
+프로덕트(다방 dabangapp.com 참고)의 정밀함 — "clean & modern"이라는 무정향 기본값이
+아니라, 아래 결정들이 그 정향의 실체다. 종이 질감의 관보 은유는 폐기하고, 박스형 카드
++ 단일 코발트 액센트 + 극단 웨이트 대비 타이포로 프로덕트 UI를 세운다.
 
 ## Genre
-editorial
+product / map-console
 
 ## Macrostructure family
-- App 페이지(대시보드·상세·북마크): **장부(ledger) 리듬** — 수평 헤어라인 룰로 행을 구분,
-  카드 테두리·그림자 최소화. enrichment 금지, 기능이 지면을 끌고 간다.
-- Form 페이지(로그인·가입·온보딩·프로필): **문서 양식(서식) 리듬** — 좁은 단(≤480px),
-  라벨 소형캡스 스타일, 입력은 1px 룰 테두리(radius --r-md) + focus 시 남록 테두리
-  (input은 전 페이지 공유 컴포넌트라 밑줄-only로 바꾸지 않는다).
-- 지도는 유일한 "도판(圖版)" — 지면 위 삽입 도판처럼 가는 룰 테두리로 감싼다.
+- App 페이지(대시보드·상세·북마크): **카드 그리드** — surface 배경 + 1px line 보더 +
+  radius 14px 박스. hover 시 보더 강조 + shadow-2. 헤어라인 룰·장부 리듬 폐기.
+- Form 페이지(로그인·가입·온보딩·프로필): 좁은 단(≤480px), 입력 높이 46px + radius
+  --r-md + focus 시 accent 보더 + 3px accent-soft 링(input은 전 페이지 공유 컴포넌트).
+- 지도는 유일한 "도판" — 카드와 동일한 line 보더로 감싼다.
+- 헤더는 **다방식 1행 상단바**: 로고 + 검색창(디자인만) + 텍스트 내비 + 계정 액션.
+  필터 드롭다운 칩(2행)은 대시보드(인덱스) 페이지 소유 — base는 토큰만 제공한다.
 
-## Theme — 색 (OKLCH, 앵커 hue 85 웜 크림)
-- `--color-paper`    oklch(97.5% 0.012 85)   /* 종이 — 현 크림보다 살짝 가라앉힘 */
-- `--color-paper-2`  oklch(95%   0.014 85)   /* 소프트 면 (배너·푸터·hover) */
-- `--color-paper-3`  oklch(92%   0.014 85)   /* 강한 면 (지도 placeholder 등) */
-- `--color-ink`      oklch(22%   0.012 70)   /* 제목·강조 — 순흑 금지 */
-- `--color-body`     oklch(32%   0.010 70)   /* 본문 */
-- `--color-muted`    oklch(48%   0.008 70)   /* 보조 */
-- `--color-faint`    oklch(62%   0.006 70)   /* 뮤트 소프트 */
-- `--color-rule`     oklch(84%   0.010 85)   /* 헤어라인 룰 */
-- `--color-rule-strong` oklch(30% 0.012 70)  /* 굵은 룰(제호 아래 double rule 등) */
-- `--color-accent`   oklch(40%  0.065 195)   /* 남록(藍綠) — 링크·활성·1순위. 뷰포트 5% 이하 */
-- `--color-accent-soft` oklch(93% 0.02 195)  /* 남록 소프트 배경(태그) */
-- `--color-signal`   oklch(55%  0.19  35)    /* 주홍(朱紅) — 마감 임박·오류. 도장/인주의 색 */
-- `--color-signal-soft` oklch(95% 0.03 35)
-- `--color-warn`     oklch(62%  0.13  75)    /* 황토 — D-7 이내 */
-- `--color-ok`       oklch(55%  0.10 165)    /* 진행중/여유 */
-- `--color-focus`    oklch(40%  0.065 195)   /* 포커스 링 = 남록, 2px, 등장 애니메이션 금지 */
-- peach(#ffb084) 계열은 **폐지**. 기존 --accent-peach 사용처는 paper-2/signal-soft로 이관.
+## Theme — 색 (OKLCH, 단일 앵커 hue 262 코발트)
+전 토큰 OKLCH. 뉴트럴 전부 hue 262로 틴트(쿨 그레이) — 순흑백 금지. 액센트는
+내비 활성·링크·CTA·활성 칩·1순위에만 쓴다(뷰포트 ≤3%).
+
+- `--color-canvas`   oklch(97.5% 0.004 262)   /* 페이지 배경 */
+- `--color-surface`  oklch(99.4% 0.002 262)   /* 카드·헤더 */
+- `--color-surface-2` oklch(95.5% 0.006 262)  /* hover·소프트 면 */
+- `--color-ink`      oklch(21%   0.02  262)   /* 제목·강조 — 순흑 금지 */
+- `--color-body`     oklch(32%   0.015 262)   /* 본문 */
+- `--color-muted`    oklch(48%   0.012 262)   /* 보조 */
+- `--color-faint`    oklch(63%   0.01  262)   /* 뮤트 소프트 */
+- `--color-line`     oklch(90%   0.006 262)   /* 카드·인풋 보더 */
+- `--color-line-strong` oklch(80% 0.01 262)   /* hover 보더 */
+- `--color-accent`   oklch(48%   0.19  262)   /* 코발트 — 링크·활성·CTA·1순위 */
+- `--color-accent-strong` oklch(42% 0.2 262)  /* accent hover */
+- `--color-accent-soft` oklch(94% 0.03 262)   /* accent 소프트 배경 */
+- `--color-signal`   oklch(55%   0.19  25)    /* 웜레드 — 마감 임박·오류 */
+- `--color-signal-soft` oklch(95% 0.03 25)
+- `--color-warn`     oklch(62%   0.13  75)    /* 앰버 — D-7 이내 */
+- `--color-warn-soft` oklch(95% 0.05 75)
+- `--color-ok`       oklch(55%   0.11 165)    /* 진행중/여유 */
+- `--color-ok-soft`  oklch(94%   0.05 165)
+- `--color-focus`    = `--color-accent`
+- 그림자(쿨 틴트, 저투명 2단): `--shadow-1` 0 1px 2px oklch(20% .02 262 / .06) ·
+  `--shadow-2` 0 6px 20px oklch(20% .02 262 / .10) — 카드 hover 전용.
+- 레이아웃 폭: `--w-page` 1080px(.wrap max-width).
 
 ## Typography (2+1 규칙)
-- Display: **"Hahmlet"** (Google Fonts, variable) weight 600–700, style normal —
-  h1·h2·브랜드 제호·섹션 제목. 이탤릭 헤더 금지.
-- Body: **"IBM Plex Sans KR"** (Google Fonts) weight 400, 강조 700 —
-  본문·UI·버튼·폼. 시스템 폴백: "Apple SD Gothic Neo", sans-serif.
-- Outlier: **"IBM Plex Mono"** weight 600 — 역할 고정: **핵심 수치**(D-day figure,
-  가점 점수, 마커 수치)에만. 그 외 사용 금지. `font-variant-numeric: tabular-nums`.
-- 로딩: Google Fonts `<link>` + `font-display: swap` + preconnect. 서브셋 한글 woff2.
-- Scale(1.25 major third, 16px 기준): --text-sm 13px · --text-base 15.5px ·
-  --text-md 17px · --text-lg 21px · --text-xl 26px · --text-2xl 33px.
-  h1 = --text-2xl(모바일 26px), h2 = --text-lg. display 트래킹 -0.02em.
-- 본문 line-height 1.65, display 1.2. `word-break: keep-all` 유지.
+- Display + Body: 단일 패밀리 **"SUIT Variable"**(jsDelivr CDN, variable) — 극단
+  웨이트 대비로 위계를 만든다: 본문 400 ↔ 제목(h1/h2/.display) 800. 이탤릭 헤더 금지.
+  기본값(Noto/Inter/Pretendard)과 직전 시스템의 IBM Plex Sans KR 모두 기각 —
+  2차 수렴 방지를 위해 재선택하지 않는다.
+- Outlier: **"IBM Plex Mono"** weight 600(Google Fonts) — 역할 고정: **핵심 수치**
+  (D-day figure, 가점 점수, 마커 수치)에만. 한글 폴백은 SUIT Variable로 이어져
+  임의 시스템 폰트로 새지 않는다. `font-variant-numeric: tabular-nums`.
+- 로딩: SUIT Variable은 `<link rel="preconnect" href="https://cdn.jsdelivr.net">` +
+  jsDelivr stylesheet 링크. IBM Plex Mono만 기존처럼 Google Fonts
+  `<link>`(`display=swap`, `fonts.googleapis.com`/`fonts.gstatic.com` preconnect 2개
+  유지)로 로드한다.
+- Scale: --text-xs 12px · --text-sm 13px · --text-base 14.5px · --text-md 16px ·
+  --text-lg 19px · --text-xl 24px(모바일 22px) · --text-2xl 32px(모바일 28px).
+  h1 = --text-xl/800, h2 = --text-lg/800, .display = --text-2xl/800. 트래킹 -0.02em.
+- 본문 line-height 1.6. `word-break: keep-all` 유지.
 
-## 레이아웃 · 룰(rule) 언어
-- 라운드 축소: --r-md 12→6px, --r-lg 16→8px. 칩/뱃지는 pill 유지 가능하되 그라데이션 금지.
-- **카드 → 지면 행**: .card는 배경 없는(종이색 그대로) 블록 + 하단 헤어라인 룰이 기본.
-  테두리 4면 상자·그림자·hover lift 폐지. hover는 paper-2 배경 스왑만.
-- 섹션 제목(h2) 아래는 double rule(굵은 룰 + 가는 룰) — 관보 제호 관습.
-- topbar: 제호(Hahmlet 700) + 얇은 날짜 행, 아래 double rule. 내비는 텍스트 링크 + 활성 밑줄.
-- 표(.table)는 이 시스템의 일급 시민 — 룰 위계(굵은 머리 룰, 가는 행 룰)로 정돈.
-- 여백: 기존 4pt 스케일 유지(--s-*). 섹션 간 간격은 룰이 있으니 과감히 줄여도 된다.
+## 레이아웃 · 컴포넌트 셰이프
+- 라운드: --r-xs 4px · --r-sm 6px · --r-md 10px · --r-lg 14px · --r-pill 9999px.
+- **카드 복귀**: surface 배경 + 1px line 보더 + radius 14px + hover 시 보더 진해짐
+  (line-strong) + shadow-2. 헤어라인 룰·double rule·장부 리듬 전면 폐기.
+- 섹션 제목(h2)은 double rule 없이 margin-bottom 14px만으로 여백을 준다.
+- topbar: full-width surface 1행, 1px 하단 보더, sticky top:0. 좌→우
+  `[.brand][.search-bar][.topnav][.topbar-actions]`. 내비는 pill 배경 hover.
+- 표(.table)는 th 배경 surface-2 + 12px/700 muted, td tabular-nums, 1px line 하단.
+- 여백: 기존 4pt 스케일 유지(--s-*).
+
+## 헤더 · 검색창(디자인만)
+다방(dabangapp.com) 지도 페이지 실측 구조를 따른 1행 헤더:
+
+```html
+<header class="topbar"><div class="inner">
+  <a class="brand" href="/">청약 알리미</a>
+  <form class="search-bar" role="search" onsubmit="return false">
+    <svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg>
+    <input type="search" placeholder="지역·공고명·아파트명 검색" aria-label="공고 검색">
+  </form>
+  <nav class="topnav"><!-- 지도 / 북마크 / (로그인 시) 내정보·로그아웃 --></nav>
+  <div class="topbar-actions"><!-- 비로그인 시 로그인/회원가입 버튼 --></div>
+</div></header>
+```
+
+- 검색창은 **디자인만** — `onsubmit="return false"`로 Enter를 억제하고, JS·라우트
+  없음. `disabled`도 아니다(비활성 회색은 접근성·심미 모두 저해). `role="search"` +
+  `aria-label="공고 검색"`으로 접근성 계약을 지킨다.
+- `.search-bar`: flex:1, max-width 520px, height 42px, focus-within 시 accent 보더
+  + 0 0 0 3px accent-soft 링.
+- 필터 드롭다운 칩(2행)은 대시보드(인덱스) 페이지 소유 — base는 만들지 않는다.
+- ≤720px: 헤더가 flex-wrap하고 `.search-bar`가 order:3 + flex-basis:100%로 2행
+  전체 폭을 차지한다. overflow-x는 어떤 뷰포트에서도 발생하지 않아야 한다.
 
 ## Motion
 - Easing: `cubic-bezier(0.16, 1, 0.3, 1)` = `--ease-out` 단일.
 - Duration: `--dur-fast 120ms` · `--dur-base 180ms`. 이 둘뿐.
-- 허용: opacity/색/배경 전환, 토스트 fade+8px slide. **금지**: transform lift·bounce·
-  스크롤 리빌·카운터 애니메이션. 지도 마커 선택 강조는 scale 대신 룰 강조(테두리·z-index).
-- `prefers-reduced-motion: reduce` → 모든 전환 ≤150ms opacity만.
+- 전환 대상은 transform/opacity/border-color/box-shadow만. **금지**: bounce·
+  스크롤 리빌·카운터 애니메이션.
+- `prefers-reduced-motion: reduce` → 모든 전환 사실상 끔(.01ms, animation:none).
 
 ## Microinteractions stance
 - silent success — 축하 토스트 금지, 실패만 토스트로 알린다(기존 관습 유지).
-- hover 배경 스왑 120ms · :focus-visible 링 즉시(0ms, 애니메이션 금지).
+- hover 전환 120ms · :focus-visible 링 즉시(0ms, 애니메이션 금지).
 - 낙관적 갱신 유지(북마크 토글 기존 로직).
 
 ## CTA voice
-- Primary: ink 채움(oklch ink) + paper 글자, radius 6px, 44px 높이 — 도장 같은 확신.
-- Secondary: 1px ink 테두리, 투명 배경, hover 시 paper-2.
-- 텍스트 링크: 남록 + 밑줄(1px, offset 3px). 화살표 아이콘은 유지.
+- Primary: accent 채움 + surface(거의 흰) 글자, radius 10px, 44px 높이,
+  hover는 accent-strong. ink 채움 도장 버튼(v1)은 폐기.
+- Secondary: surface 배경 + 1px line 보더, hover는 surface-2.
+- `.btn-sm`(height 36px, padding 8px 14px, font 13px) — 헤더 로그인/회원가입 등
+  좁은 자리의 CTA 전용 신규 변형.
+- 텍스트 링크: accent 컬러, 밑줄 없음(hover 시 색만 진해짐).
+
+## 상태색 의미
+signal(마감임박, 웜레드 hue 25) · warn(D-7 이내, 앰버 hue 75) · ok(여유, hue 165).
+각각 `-soft` 짝 토큰 제공. 뱃지 변형:
+- `.badge--soon` = signal 채움 + surface 텍스트(가장 급함 — 유일하게 채움)
+- `.badge--mid` = warn-soft 배경 + warn 텍스트
+- `.badge--far` = ok-soft 배경 + ok 텍스트
+- `.badge--pre` = accent-soft 배경 + accent 텍스트
 
 ## Per-page allowances
-- 모든 페이지: enrichment 금지(타이포·룰만). 지도가 유일한 도판.
-- 온보딩: step 표시는 관보식 "제1장/제2장/제3장" 넘버링 허용(진짜 순서형 콘텐츠).
+- 모든 페이지: enrichment 금지(카드·타이포·컬러만). 지도가 유일한 도판.
+- 온보딩: step 표시는 순서형 넘버링 허용(진짜 순서형 콘텐츠).
 
 ## What pages MUST share
-- 제호 타이포(Hahmlet 700 "청약 알리미"), double rule 관습.
-- 3색 역할: 남록=정보/활성, 주홍=마감/오류, 잉크=본문. 수치=Plex Mono.
-- CTA voice, 룰 언어(카드 상자 대신 헤어라인), 모션 스탠스.
+- 브랜드 워드마크(SUIT Variable 800 "청약 알리미"), 카드 셰이프(line 보더+radius 14).
+- 3색 역할: accent=정보/활성, signal=마감/오류, ink=본문. 수치=Plex Mono.
+- CTA voice, 카드 언어(박스+hover shadow), 모션 스탠스.
+- 공통 헤더 계약(`.topbar`/`.brand`/`.search-bar`/`.topnav`/`.topbar-actions`) —
+  검색창은 디자인만 유지, 기능을 추가하지 않는다.
 
 ## What pages MAY differ on
 - 단 구성(대시보드 2단 지도+목록 / 서식 페이지 1단 좁은 단).
-- 표 vs 행 리스트 선택(콘텐츠 형태에 따라).
+- 표 vs 카드 리스트 선택(콘텐츠 형태에 따라).
+- 필터 칩 2행의 구체 옵션 구성(대시보드 소유).
+
+## 하위 호환 — 구 토큰 별칭 (v1 관보 에디토리얼 → v2)
+아직 이관되지 않은 페이지가 깨진 스타일 없이 렌더되도록, base.html의 :root는 구
+토큰명 전부를 v2 값으로의 별칭으로 유지한다(값 자체가 v2를 가리키므로 미마이그레이션
+페이지도 자동으로 v2 색·타이포를 입는다):
+
+```css
+--color-paper: var(--color-canvas); --color-paper-2: var(--color-surface-2);
+--color-paper-3: oklch(93% 0.008 262);
+--color-rule: var(--color-line); --color-rule-strong: var(--color-line-strong);
+--canvas: var(--color-paper); --surface-soft: var(--color-paper-2);
+--surface-card: var(--color-paper-2); --surface-strong: var(--color-paper-3);
+--ink: var(--color-ink); --body-strong: var(--color-ink); --body: var(--color-body);
+--muted: var(--color-muted); --muted-soft: var(--color-faint);
+--hairline: var(--color-rule); --hairline-soft: var(--color-rule);
+--primary: var(--color-accent); --primary-active: var(--color-accent-strong);
+--primary-disabled: var(--color-rule); --on-primary: var(--color-surface);
+--accent-teal: var(--color-accent); --on-teal: var(--color-surface);
+--accent-peach: var(--color-signal-soft); --accent-peach-soft: var(--color-paper-2);
+--ok: var(--color-ok); --warn: var(--color-warn); --danger: var(--color-signal);
+--font-sans: var(--font-body);
+--s-section: 96px; --r-xl: 12px;
+```
+
+**다운스트림 페이지 태스크(t2-index/t3-detail/t4-forms)가 자기 페이지를 v2로
+이관할 때만** 이 별칭 대신 신규 토큰명(`--color-surface`, `--color-line` 등)을
+직접 참조하도록 갱신한다 — base.html은 건드리지 않는다(별칭 이중화 금지).
 
 ## 불변 계약 (리스타일링이 절대 깨면 안 되는 것)
 - JS 소비 계약: `.card` `.chip` `.bookmark-btn` `.mk` 계열 클래스명과 모든 `data-*`
@@ -97,31 +177,41 @@ editorial
 - aria 계약(aria-pressed/current/describedby/invalid, role), 44px 터치 타깃.
 - Jinja 블록 구조(base의 title/head/topbar/content/footer/scripts)와 매크로 시그니처
   (notice_card(it), password_field(...), field(...), check(...), step_nav(...)) 유지.
+- 아이콘 스프라이트 22개(추가/삭제 금지). 이모지 0개.
+- topbar z-index(100) < toast z-index(1000). `--topbar-h`는 JS가 실측해 갱신.
 - 기존 pytest 템플릿 테스트 전량 통과.
 
 ## Exports — tokens.css (base.html :root에 인라인)
 ```css
 :root {
-  --color-paper: oklch(97.5% 0.012 85); --color-paper-2: oklch(95% 0.014 85);
-  --color-paper-3: oklch(92% 0.014 85);
-  --color-ink: oklch(22% 0.012 70); --color-body: oklch(32% 0.010 70);
-  --color-muted: oklch(48% 0.008 70); --color-faint: oklch(62% 0.006 70);
-  --color-rule: oklch(84% 0.010 85); --color-rule-strong: oklch(30% 0.012 70);
-  --color-accent: oklch(40% 0.065 195); --color-accent-soft: oklch(93% 0.02 195);
-  --color-signal: oklch(55% 0.19 35); --color-signal-soft: oklch(95% 0.03 35);
-  --color-warn: oklch(62% 0.13 75); --color-ok: oklch(55% 0.10 165);
-  --color-focus: oklch(40% 0.065 195);
-  --font-display: "Hahmlet", "Apple SD Gothic Neo", serif;
-  --font-body: "IBM Plex Sans KR", -apple-system, "Apple SD Gothic Neo", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --text-sm: 13px; --text-base: 15.5px; --text-md: 17px;
-  --text-lg: 21px; --text-xl: 26px; --text-2xl: 33px;
-  --r-xs: 3px; --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-pill: 9999px;
+  --color-canvas: oklch(97.5% 0.004 262);
+  --color-surface: oklch(99.4% 0.002 262);
+  --color-surface-2: oklch(95.5% 0.006 262);
+  --color-ink: oklch(21% 0.02 262); --color-body: oklch(32% 0.015 262);
+  --color-muted: oklch(48% 0.012 262); --color-faint: oklch(63% 0.01 262);
+  --color-line: oklch(90% 0.006 262); --color-line-strong: oklch(80% 0.01 262);
+  --color-accent: oklch(48% 0.19 262); --color-accent-strong: oklch(42% 0.2 262);
+  --color-accent-soft: oklch(94% 0.03 262);
+  --color-signal: oklch(55% 0.19 25); --color-signal-soft: oklch(95% 0.03 25);
+  --color-warn: oklch(62% 0.13 75); --color-warn-soft: oklch(95% 0.05 75);
+  --color-ok: oklch(55% 0.11 165); --color-ok-soft: oklch(94% 0.05 165);
+  --color-focus: var(--color-accent);
+  --font-display: "SUIT Variable", "Apple SD Gothic Neo", sans-serif;
+  --font-body: "SUIT Variable", -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-mono: "IBM Plex Mono", "SUIT Variable", ui-monospace, monospace;
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14.5px; --text-md: 16px;
+  --text-lg: 19px; --text-xl: 24px; --text-2xl: 32px;
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-pill: 9999px;
+  --shadow-1: 0 1px 2px oklch(20% 0.02 262 / 0.06);
+  --shadow-2: 0 6px 20px oklch(20% 0.02 262 / 0.10);
+  --w-page: 1080px;
   --s-xxs: 4px; --s-xs: 8px; --s-sm: 12px; --s-md: 16px; --s-lg: 24px;
   --s-xl: 32px; --s-xxl: 48px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-fast: 120ms; --dur-base: 180ms;
 }
 ```
-기존 토큰명(--canvas·--ink·--accent-teal 등)에서 위 이름으로 옮기되, 전 템플릿의
-참조를 함께 갱신한다(별칭 이중화 금지 — t1이 base/_macros, 각 태스크가 자기 페이지 몫).
+구 토큰명(--canvas·--ink·--accent-teal 등)은 위 "하위 호환" 절의 별칭 그대로
+base.html에 유지된다 — 페이지 태스크가 자기 몫을 이관할 때 신규 이름으로 옮기되,
+base.html의 별칭 정의 자체는 건드리지 않는다(별칭 이중화 금지 — t1이 base/_macros,
+각 태스크가 자기 페이지 몫).
