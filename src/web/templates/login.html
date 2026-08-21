@@ -5,8 +5,8 @@
 <style>
   /* 로그인 전용: base body는 중앙정렬이 아니므로 이 페이지에서만 flex center */
   body{min-height:100vh;display:flex;align-items:center;justify-content:center}
-  /* base .wrap(max-width:840·pad 22/20/72)을 로그인 박스로 재정의 (brief .box{max-width:380px} 실현) */
-  main.wrap{width:100%;max-width:380px;padding:24px 20px}
+  /* base .wrap(max-width:840·pad 22/20/72)을 v2 카드로 재정의(D1) — surface+line+radius-lg+shadow-1 */
+  main.wrap{width:100%;max-width:400px;padding:36px 32px;background:var(--color-surface);border:1px solid var(--color-line);border-radius:var(--r-lg);box-shadow:var(--shadow-1)}
   /* 브랜드 영역 중앙정렬 + 포인트 teal 타이틀 */
   .login-head{text-align:center;margin-bottom:var(--s-lg)}
   .login-head h1{color:var(--color-accent)}

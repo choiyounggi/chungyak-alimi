@@ -46,7 +46,7 @@ def test_login_renders_without_errors():
     # 중앙정렬(head 블록 페이지 스타일 주입)
     assert "min-height:100vh" in out
     assert "display:flex" in out
-    assert "max-width:380px" in out
+    assert "max-width:400px" in out
 
     # 브랜드 영역
     assert "청약 알리미" in out
@@ -124,6 +124,18 @@ def test_login_escapes_email_value():
 
     assert "<script>alert(1)</script>" not in out
     assert "&lt;script&gt;" in out or "&amp;lt;" in out
+
+
+# ── 정상(D1): 인증 박스는 v2 카드(surface+line+radius-lg+shadow-1)로 렌더된다 ──
+@pytest.mark.parametrize("name", ["login.html", "register.html"])
+def test_auth_wrap_is_v2_card(name):
+    out = _render(name, {"error": None, "email": ""})
+
+    assert "main.wrap{width:100%;max-width:400px;padding:36px 32px;" in out
+    assert (
+        "background:var(--color-surface);border:1px solid var(--color-line);"
+        "border-radius:var(--r-lg);box-shadow:var(--shadow-1)}" in out
+    )
 
 
 # ── error-case(DoD): 이모지 0개(소스 + 렌더) ──

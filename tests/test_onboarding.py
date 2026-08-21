@@ -204,9 +204,19 @@ def test_get_renders_saved_values_and_step_marker(client):
     assert 'aria-current="step"' in r.text
     # 완료한 이전 스텝으로는 링크로 되돌아갈 수 있다
     assert 'href="/onboarding/1"' in r.text
-    # 관보 토큰 이관(t4 D2): select가 base input과 동일 계약(focus 남록), 구 hardcode hex 제거
-    assert "select:focus{border-color:var(--color-accent)" in r.text
+    # 관보 토큰 이관(t4 D2): select가 base input과 동일 계약(focus 링까지), 구 hardcode hex 제거
+    assert (
+        "select:focus{border-color:var(--color-accent);"
+        "box-shadow:0 0 0 3px var(--color-accent-soft)}" in r.text
+    )
     assert "#eef4ff" not in r.text
+    # 스텝 pill 3색 상태(t4 D2): done(링크)=accent-soft, 미래(span)=surface-2, current=accent 채움
+    assert ".steps .step a{background:var(--color-accent-soft);color:var(--color-accent)}" in r.text
+    assert ".steps .step span{background:var(--color-surface-2);color:var(--color-muted)}" in r.text
+    assert (
+        ".steps .step--current a,.steps .step--current span{"
+        "background:var(--color-accent);color:var(--color-surface)}" in r.text
+    )
 
 
 def test_step3_get_renders_saved_rows_and_checked_preferences(client):
@@ -217,6 +227,13 @@ def test_step3_get_renders_saved_rows_and_checked_preferences(client):
     # 체크된 선호전형과 파트너 블록이 복원된다
     assert r.text.count("checked") >= 3
     assert "partner_1_residence_region" in r.text
+    # fieldset·btn-add 토큰 이관(t4 D2): 새 이름(--color-line)만 참조
+    assert "fieldset{border:1px solid var(--color-line);" in r.text
+    assert "border:1px dashed var(--color-line);" in r.text
+    assert (
+        ".btn-add:focus-visible{outline:none;border-color:var(--color-accent);"
+        "box-shadow:0 0 0 3px var(--color-accent-soft)}" in r.text
+    )
 
 
 # ── ② 에러: 교차 필드 검증 ────────────────────────────────────────────────────
