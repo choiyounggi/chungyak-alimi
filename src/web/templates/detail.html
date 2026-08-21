@@ -3,20 +3,26 @@
 
 {% block head %}
 <style>
+  .hero{padding-bottom:18px;margin-bottom:20px;border-bottom:1px solid var(--color-line)}
   .meta{color:var(--color-muted);font-size:13.5px;margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
-  .badges{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 18px}
-  .section h2{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .badges{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 0}
+  .section{background:var(--color-surface);border:1px solid var(--color-line);border-radius:var(--r-lg);padding:20px 24px;margin:0 0 16px}
+  .section h2{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:var(--text-md)}
+  .section h2 .ic{color:var(--color-accent)}
+  .judged{border-top:3px solid var(--color-accent)}
+  .notice-banner{background:var(--color-signal-soft);color:var(--color-signal);border-radius:var(--r-md);padding:14px 18px;margin:0 0 16px}
+  .notice-banner a{color:var(--color-signal);font-weight:700}
   .sched,.kv{display:grid;grid-template-columns:auto 1fr;gap:9px 16px;font-size:13.5px}
-  .sched .k,.kv .k{color:var(--color-muted);font-weight:600}
+  .sched .k,.kv .k{color:var(--color-muted);font-weight:700;font-size:12.5px}
   .spec{font-size:12px;font-weight:700;color:var(--color-ok)}
   .note{color:var(--color-muted);font-size:13px;margin:0 0 10px}
   pre.cts{white-space:pre-wrap;font:13px/1.75 inherit;color:var(--color-body);margin:0}
   .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
   .imgs a{display:block;text-decoration:none;color:var(--color-body);font-size:12.5px;font-weight:600;text-align:center}
-  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--color-rule);background:var(--color-paper-3);margin-bottom:5px}
-  .imgs a:hover img{border-color:var(--color-accent)}
+  .imgs img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--color-line);background:var(--color-surface-2);margin-bottom:5px}
+  .imgs a:hover img{box-shadow:var(--shadow-1)}
   .srcs{display:flex;flex-wrap:wrap;gap:8px}
-  #map{width:100%;height:300px;border:1px solid var(--color-rule);border-radius:var(--r-md);margin-bottom:14px;background:var(--color-paper-3)}
+  #map{width:100%;height:300px;border:1px solid var(--color-line);border-radius:var(--r-md);margin-bottom:14px;background:var(--color-surface-2)}
   #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;
     display:flex;align-items:center;justify-content:center}
   #lightbox[hidden]{display:none}
@@ -34,32 +40,34 @@
 
 {% block topbar %}
 <header class="topbar"><div class="inner">
-  <a href="/"><svg class="ic"><use href="#i-arrow-left"></use></svg> 목록으로</a>
+  <a class="btn btn-secondary btn-sm" href="/"><svg class="ic"><use href="#i-arrow-left"></use></svg> 목록으로</a>
 </div></header>
 {% endblock %}
 
 {% block content %}
-  <h1>{{ notice.house_nm }}</h1>
-  <div class="meta">
-    <span class="tag">{{ notice.area_nm or '-' }}</span>
-    <span>{{ notice.house_secd_nm or '' }} {{ notice.house_dtl_secd_nm or '' }}</span>
-    <span>총 {{ notice.tot_suply_hshldco or '-' }}세대</span>
-    {% if mvn %}<span>입주예정 {{ mvn[:4] }}.{{ mvn[4:6] }}</span>{% endif %}
+  <div class="hero">
+    <h1>{{ notice.house_nm }}</h1>
+    <div class="meta">
+      <span class="tag">{{ notice.area_nm or '-' }}</span>
+      <span>{{ notice.house_secd_nm or '' }} {{ notice.house_dtl_secd_nm or '' }}</span>
+      <span>총 {{ notice.tot_suply_hshldco or '-' }}세대</span>
+      {% if mvn %}<span>입주예정 {{ mvn[:4] }}.{{ mvn[4:6] }}</span>{% endif %}
+    </div>
+
+    {% if regs %}
+    <div class="badges">{% for r in regs %}<span class="badge badge--pre">{{ r }}</span>{% endfor %}</div>
+    {% endif %}
   </div>
 
-  {% if regs %}
-  <div class="badges">{% for r in regs %}<span class="badge badge--pre">{{ r }}</span>{% endfor %}</div>
-  {% endif %}
-
   {% if superseded_by %}
-  <section class="section" style="border-left:3px solid var(--color-accent);padding-left:14px">
+  <div class="notice-banner">
     <b><svg class="ic"><use href="#i-alert"></use></svg> 정정공고로 대체된 공고입니다.</b>
     <a href="/notice/{{ superseded_by }}">최신 정정공고 보기 <svg class="ic"><use href="#i-arrow-right"></use></svg></a>
-  </section>
+  </div>
   {% endif %}
 
   {% if judged %}
-  <section class="section">
+  <section class="section judged">
     <h2><svg class="ic"><use href="#i-target"></use></svg> 내 청약 판정</h2>
     {% if judged.supported %}
     <div class="sched">
@@ -260,7 +268,7 @@
       '<svg class="ic" style="width:28px;height:28px"><use href="#i-map"></use></svg>' +
       '<b style="color:var(--color-body)">지도를 불러오지 못했어요</b>' +
       '<span>카카오 지도 서버 연결이 원활하지 않아요. 잠시 후 새로고침 해주세요.</span>' +
-      '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--color-rule);background:var(--color-paper);color:var(--color-body);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:6px;cursor:pointer">새로고침</button>' +
+      '<button onclick="location.reload()" style="margin-top:4px;border:1px solid var(--color-line);background:var(--color-canvas);color:var(--color-body);font:inherit;font-size:13px;font-weight:600;padding:7px 16px;border-radius:6px;cursor:pointer">새로고침</button>' +
       '</div>';
   }
 
