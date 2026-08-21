@@ -71,6 +71,12 @@ def verify_password(hash_: str, password: str) -> bool:
         return False
 
 
+def change_password(member: Member, new_hash: str, *, session: Session) -> None:
+    """회원의 비밀번호 해시를 교체하고 커밋한다."""
+    member.password_hash = new_hash
+    session.commit()
+
+
 # 계정이 없을 때도 같은 비용의 검증을 수행해, 응답 시간으로 이메일 존재 여부가 새지 않게 한다.
 _DUMMY_HASH = _ph.hash("chungyak-alimi-dummy-password")
 

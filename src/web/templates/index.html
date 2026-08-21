@@ -10,7 +10,8 @@
   /* 지도(좌) + 리스트(우) 2단 grid */
   .map-layout{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start}
   .map-layout--nomap{display:block}
-  #chungyak-map{width:100%;height:calc(100vh - 150px);min-height:420px;position:sticky;top:16px;
+  #chungyak-map{width:100%;height:calc(100vh - 150px);min-height:420px;position:sticky;
+    top:calc(var(--topbar-h, 60px) + 16px);
     border-radius:var(--r-lg);border:1px solid var(--color-rule);background:var(--color-paper-3)}
   .list-panel{min-width:0}                 /* grid 자식 overflow 방지 */
   .list-panel--full{min-width:0}
@@ -21,8 +22,11 @@
     #chungyak-map{position:static;height:52vh;min-height:300px}
   }
   .count{color:var(--color-accent);font-weight:700}
-  /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리 */
-  .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px}
+  /* 필터: 클릭 가능(필터) 그룹과 고정 조건 그룹을 라벨로 분리. topbar 바로 아래 고정되어
+     목록 스크롤 중에도 노출(topbar보다 낮은 z-index, 불투명 배경으로 본문 겹침 방지) */
+  .filters{display:flex;flex-direction:column;gap:10px;margin:16px 0 22px;
+    position:sticky;top:var(--topbar-h, 60px);z-index:90;background:var(--color-paper);
+    padding:8px 0;border-bottom:1px solid var(--color-rule)}
   .filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .filter-label{font-size:12px;font-weight:700;color:var(--color-muted);flex:none;margin-right:2px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}

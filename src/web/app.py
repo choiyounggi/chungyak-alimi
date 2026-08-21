@@ -18,6 +18,7 @@ from ..db import (
     SUPERSEDED_REASON,
     Bookmark,
     MatchResult,
+    Member,
     MemberProfile,
     Notice,
     SessionLocal,
@@ -29,7 +30,16 @@ from ..db import (
     remove_bookmark,
 )
 from ..filters import load_filter_config
-from ..members import get_profile, profile_from_member, update_profile
+from ..members import (
+    MAX_PASSWORD_LEN,
+    change_password,
+    get_profile,
+    hash_password,
+    profile_from_member,
+    update_profile,
+    verify_password,
+)
+from ..password_policy import POLICY_HINTS, validate_password
 from ..regions import region_matches
 from ..scoring import judge_notice, judge_rank, judge_rank_public, load_profile
 from . import auth, onboarding
@@ -481,13 +491,27 @@ def _profile_form_values(prof: MemberProfile | None) -> dict:
     return values
 
 
-def _profile_context(values: dict, errors: dict, *, saved: bool = False) -> dict:
+def _profile_context(
+    values: dict,
+    errors: dict,
+    *,
+    saved: bool = False,
+    email: str = "",
+    pw_saved: bool = False,
+    pw_error: str | None = None,
+    pw_errors: dict | None = None,
+) -> dict:
     return {
         "values": values,
         "errors": errors,
         "saved": saved,
         "household_types": HOUSEHOLD_TYPES,
         "couple_types": COUPLE_HOUSEHOLD_TYPES,
+        "email": email,
+        "pw_saved": pw_saved,
+        "pw_error": pw_error,
+        "pw_errors": pw_errors or {},
+        "policy_hints": POLICY_HINTS,
     }
 
 
@@ -500,9 +524,15 @@ def healthz() -> dict:
 def profile_page(request: Request, member_id: int = Depends(require_login)):
     with SessionLocal() as session:
         values = _profile_form_values(get_profile(member_id, session=session))
+        member = session.get(Member, member_id)
     saved = request.query_params.get("saved") == "1"
+    pw_saved = request.query_params.get("pw_saved") == "1"
     return _TEMPLATES.TemplateResponse(
-        request, "profile.html", _profile_context(values, {}, saved=saved)
+        request,
+        "profile.html",
+        _profile_context(
+            values, {}, saved=saved, email=member.email if member else "", pw_saved=pw_saved
+        ),
     )
 
 
@@ -524,6 +554,90 @@ async def profile_submit(request: Request, member_id: int = Depends(require_logi
     with SessionLocal() as session:
         update_profile(member_id, data.model_dump(), session=session)
     return RedirectResponse("/profile?saved=1", status_code=303)
+
+
+# ── 계정 섹션 — 비밀번호 변경 ────────────────────────────────────────────────
+
+_PASSWORD_MISMATCH = "비밀번호와 비밀번호 확인이 다릅니다"
+_CURRENT_PASSWORD_WRONG = "현재 비밀번호가 올바르지 않습니다"
+
+# pydantic 이 만든 원문 메시지는 영문이고 입력 일부를 담을 수 있으므로 화면에 쓰지 않는다.
+# 실패한 필드 이름(loc)만 읽어 서버가 정한 고정 문장으로 치환한다(auth.py _FIELD_MESSAGES 관례).
+_PW_FIELD_MESSAGES: dict[str, str] = {
+    "current_password": f"현재 비밀번호를 1~{MAX_PASSWORD_LEN}자로 입력해주세요",
+    "new_password": f"새 비밀번호를 1~{MAX_PASSWORD_LEN}자로 입력해주세요",
+    "new_password2": f"새 비밀번호 확인을 1~{MAX_PASSWORD_LEN}자로 입력해주세요",
+}
+
+
+class PasswordChangeForm(BaseModel):
+    """비밀번호 변경 폼의 신뢰 경계 검증(형식·길이). KISA 정책·확인 일치는 라우트가 이어서 본다."""
+
+    current_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LEN)
+    new_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LEN)
+    new_password2: str = Field(min_length=1, max_length=MAX_PASSWORD_LEN)
+
+
+def _pw_shape_errors(exc: ValidationError) -> dict[str, list[str]]:
+    """ValidationError -> {필드: [고정 문장]}. 사용자 입력을 반사하지 않는다."""
+    out: dict[str, list[str]] = {}
+    for err in exc.errors():
+        field = str(err["loc"][0]) if err["loc"] else "new_password"
+        message = _PW_FIELD_MESSAGES.get(field)
+        if message is not None and message not in out.setdefault(field, []):
+            out[field].append(message)
+    return {field: msgs for field, msgs in out.items() if msgs}
+
+
+@app.post("/profile/password")
+async def profile_password_submit(request: Request, member_id: int = Depends(require_login)):
+    form = dict(await request.form())
+    try:
+        data = PasswordChangeForm.model_validate(form)
+        pw_errors = None
+    except ValidationError as exc:
+        data = None
+        pw_errors = _pw_shape_errors(exc)
+
+    with SessionLocal() as session:
+        member = session.get(Member, member_id)
+        values = _profile_form_values(get_profile(member_id, session=session))
+        email = member.email if member is not None else ""
+
+        if pw_errors is not None:
+            return _TEMPLATES.TemplateResponse(
+                request,
+                "profile.html",
+                _profile_context(values, {}, email=email, pw_errors=pw_errors),
+                status_code=400,
+            )
+
+        if member is None or not verify_password(member.password_hash, data.current_password):
+            return _TEMPLATES.TemplateResponse(
+                request,
+                "profile.html",
+                _profile_context(values, {}, email=email, pw_error=_CURRENT_PASSWORD_WRONG),
+                status_code=401,
+            )
+
+        # 확인 일치와 정책 위반을 함께 모아 한 번에 보여준다(register_submit 과 동일한 관례).
+        errors: dict[str, list[str]] = {}
+        if data.new_password != data.new_password2:
+            errors["new_password2"] = [_PASSWORD_MISMATCH]
+        reasons = validate_password(data.new_password, email=member.email)
+        if reasons:
+            errors["new_password"] = reasons
+        if errors:
+            return _TEMPLATES.TemplateResponse(
+                request,
+                "profile.html",
+                _profile_context(values, {}, email=email, pw_errors=errors),
+                status_code=400,
+            )
+
+        change_password(member, hash_password(data.new_password), session=session)
+
+    return RedirectResponse("/profile?pw_saved=1", status_code=303)
 
 
 def _api_member_id(request: Request) -> int:
